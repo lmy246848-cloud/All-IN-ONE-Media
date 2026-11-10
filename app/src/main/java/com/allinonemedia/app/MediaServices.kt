@@ -10,6 +10,15 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 
+private fun isValidMediaHeader(name: String, value: String): Boolean {
+    val key = name.trim()
+    val blocked = setOf("host", "connection", "content-length", "transfer-encoding", "proxy-authorization", "proxy-connection", "upgrade")
+    return key.matches(Regex("[A-Za-z0-9-]{1,64}")) &&
+        key.lowercase() !in blocked &&
+        value.length <= 4096 &&
+        !value.contains("\\r") && !value.contains("\\n")
+}
+
 data class MediaCard(
     val id: String, val title: String, val subtitle: String, val category: String,
     val pageUrl: String = "", val streamUrl: String = "", val coverUrl: String = "",
@@ -40,7 +49,7 @@ data class MediaCard(
             o.optJSONObject("headers")?.let { headerObject ->
                 headerObject.keys().asSequence().mapNotNull { key ->
                     val value = headerObject.optString(key)
-                    if (validHeader(key, value)) key to value else null
+                    if (isValidMediaHeader(key, value)) key to value else null
                 }.toMap()
             } ?: emptyMap()
         )
