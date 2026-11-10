@@ -6,6 +6,8 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import org.json.JSONTokener
+import org.jsoup.Jsoup
+import org.jsoup.parser.Parser
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
@@ -25,14 +27,15 @@ data class MediaCard(
     val description: String = "", val providerName: String = "",
     val pages: List<String> = emptyList(), val textContent: String = "",
     val textUrl: String = "", val childItems: List<MediaCard> = emptyList(),
-    val mimeType: String = "", val httpHeaders: Map<String, String> = emptyMap()
+    val mimeType: String = "", val httpHeaders: Map<String, String> = emptyMap(),
+    val providerId: String = ""
 ) {
     fun toJson(): JSONObject = JSONObject().put("id", id).put("title", title).put("subtitle", subtitle)
         .put("category", category).put("pageUrl", pageUrl).put("streamUrl", streamUrl)
         .put("coverUrl", coverUrl).put("description", description).put("providerName", providerName)
         .put("pages", JSONArray(pages)).put("content", textContent).put("textUrl", textUrl)
         .put("children", JSONArray().apply { childItems.forEach { put(it.toJson()) } })
-        .put("mimeType", mimeType).put("headers", JSONObject(httpHeaders))
+        .put("mimeType", mimeType).put("headers", JSONObject(httpHeaders)).put("providerId", providerId)
 
     companion object {
         fun fromJson(o: JSONObject): MediaCard = MediaCard(
@@ -51,7 +54,8 @@ data class MediaCard(
                     val value = headerObject.optString(key)
                     if (isValidMediaHeader(key, value)) key to value else null
                 }.toMap()
-            } ?: emptyMap()
+            } ?: emptyMap(),
+            o.optString("providerId")
         )
     }
 }
@@ -135,8 +139,8 @@ object CatalogService {
             connection.instanceFollowRedirects = true
             connection.connectTimeout = 15000
             connection.readTimeout = 20000
-            connection.setRequestProperty("User-Agent", "AllInOneMedia/0.4 Android")
-            connection.setRequestProperty("Accept", "application/json, application/x-mpegURL, audio/x-mpegurl, text/plain, text/html, */*")
+            connection.setRequestProperty("User-Agent", "AllInOneMedia/0.4.1 Android")
+            connection.setRequestProperty("Accept", "application/json, application/rss+xml, application/atom+xml, application/xml, application/x-mpegURL, audio/x-mpegurl, audio/*, video/*, text/plain, text/html, */*")
             headers.filter { (key, value) -> isValidMediaHeader(key, value) }.forEach { (key, value) ->
                 connection.setRequestProperty(key, value)
             }
@@ -147,7 +151,21 @@ object CatalogService {
             }
             val code = connection.responseCode
             val stream = if (code in 200..299) connection.inputStream else connection.errorStream
-            val text = stream?.bufferedReader()?.use { it.readText() } ?: ""
+            val text = stream?.bufferedReader(Charsets.UTF_8)?.use { reader ->
+                val output = StringBuilder()
+                val buffer = CharArray(8192)
+                var total = 0
+                while (true) {
+                    val count = reader.read(buffer)
+                    if (count < 0) break
+                    total += count
+                    if (total > 8 * 1024 * 1024) {
+                        throw IllegalStateException("The provider response is larger than 8 MB. Use a smaller catalogue feed or a paginated endpoint.")
+                    }
+                    output.append(buffer, 0, count)
+                }
+                output.toString()
+            } ?: ""
             if (code !in 200..299) throw IllegalStateException("Service returned HTTP " + code)
             return HttpTextResponse(text, connection.contentType?.substringBefore(";")?.trim()?.lowercase().orEmpty())
         } finally { connection.disconnect() }
@@ -302,7 +320,7 @@ object CatalogService {
     suspend fun mangaChapters(mangaId: String): List<MediaChapter> = withContext(Dispatchers.IO) {
         val id = URLEncoder.encode(mangaId, "UTF-8")
         val endpoint = "https://api.mangadex.org/manga/$id/feed?translatedLanguage%5B%5D=en" +
-            "&includes%5B%5D=scanlation_group&order%5Bchapter%5D=asc&limit=100"
+            "&includes%5B%5D=scanlation_group&order%5Bchapter%5D=desc&limit=100"
         val root = JSONObject(request(endpoint))
         val list = root.optJSONArray("data") ?: JSONArray()
         (0 until list.length()).mapNotNull { index ->
@@ -330,11 +348,14 @@ object CatalogService {
         val chapter = root.optJSONObject("chapter") ?: throw IllegalStateException("MangaDex returned no chapter data.")
         val base = root.optString("baseUrl").trimEnd('/')
         val hash = chapter.optString("hash")
-        val files = chapter.optJSONArray("data") ?: chapter.optJSONArray("dataSaver") ?: JSONArray()
+        val fullFiles = chapter.optJSONArray("data")
+        val saverFiles = chapter.optJSONArray("dataSaver")
+        val useFullResolution = fullFiles != null && fullFiles.length() > 0
+        val files = if (useFullResolution) fullFiles!! else saverFiles ?: JSONArray()
         if (base.isBlank() || hash.isBlank() || files.length() == 0) {
             throw IllegalStateException("No readable image pages were provided for this chapter.")
         }
-        val folder = if (chapter.has("data") && !chapter.isNull("data")) "data" else "data-saver"
+        val folder = if (useFullResolution) "data" else "data-saver"
         (0 until files.length()).mapNotNull { index ->
             val file = files.optString(index)
             file.takeIf { it.isNotBlank() }?.let { "$base/$folder/$hash/$it" }
@@ -532,33 +553,47 @@ object CatalogService {
         }
     }
 
-    private fun cardFromProviderEntry(entry: Any?, index: Int, provider: MediaProvider, depth: Int = 0): MediaCard? {
-        if (depth > 3) return null
+    private fun resolveHttpsUrl(baseUrl: String, candidate: String): String {
+        val raw = candidate.trim()
+        if (raw.isBlank()) return ""
+        return runCatching {
+            val resolved = URL(URL(baseUrl), raw)
+            if (resolved.protocol.equals("https", true) && resolved.host.isNotBlank()) resolved.toExternalForm() else ""
+        }.getOrDefault("")
+    }
+
+    private fun cardFromProviderEntry(
+        entry: Any?, index: Int, provider: MediaProvider, depth: Int = 0, baseUrl: String = provider.url
+    ): MediaCard? {
+        if (depth > 4) return null
         if (entry is String) {
             val raw = entry.trim()
             if (raw.isBlank()) return null
-            val playable = raw.takeIf { isPlayable(it) } ?: ""
-            val isHttpsPage = raw.startsWith("https://", true)
+            val resolved = resolveHttpsUrl(baseUrl, raw)
+            if (resolved.isBlank()) return null
+            val playable = resolved.takeIf { isPlayable(it) }.orEmpty()
             val pathTitle = runCatching {
-                URL(raw).path.substringAfterLast('/').substringBefore('?').ifBlank { URL(raw).host }
+                URL(resolved).path.substringAfterLast('/').substringBefore('?').ifBlank { URL(resolved).host }
             }.getOrDefault("")
             return MediaCard(
-                id = provider.id + "-" + index,
-                title = if (isHttpsPage) pathTitle.ifBlank { "Title " + (index + 1) } else raw,
+                id = provider.id + ":entry:" + index,
+                title = pathTitle.ifBlank { if (playable.isNotBlank()) "Stream " + (index + 1) else "Title " + (index + 1) },
                 subtitle = if (playable.isNotBlank()) "Direct media source" else provider.name,
                 category = provider.category,
-                pageUrl = if (isHttpsPage && playable.isBlank()) raw else "",
+                pageUrl = if (playable.isBlank()) resolved else "",
                 streamUrl = playable,
-                providerName = provider.name
+                providerName = provider.name,
+                mimeType = guessMimeType(playable),
+                httpHeaders = provider.headers,
+                providerId = provider.id
             )
         }
         val item = entry as? JSONObject ?: return null
         val metadata = item.optJSONObject("attributes")
             ?: item.optJSONObject("metadata")
             ?: item.optJSONObject("meta")
-        fun field(vararg keys: String): String {
-            return firstText(item, *keys).ifBlank { firstText(metadata, *keys) }
-        }
+        fun field(vararg keys: String): String =
+            firstText(item, *keys).ifBlank { firstText(metadata, *keys) }
 
         val rawUrl = field(
             "streamUrl", "stream_url", "playUrl", "play_url", "playbackUrl",
@@ -566,23 +601,26 @@ object CatalogService {
         )
         val genericUrl = field("url", "link", "sourceUrl", "source_url")
         val mimeType = mimeTypeFromHint(field("mimeType", "mime_type", "streamMimeType", "stream_mime_type", "format"))
+        val resolvedRawUrl = resolveHttpsUrl(baseUrl, rawUrl)
+        val resolvedGenericUrl = resolveHttpsUrl(baseUrl, genericUrl)
         val stream = when {
-            rawUrl.isNotBlank() && isHttpsUrl(rawUrl) -> rawUrl
-            genericUrl.isNotBlank() && isHttpsUrl(genericUrl) && (isPlayable(genericUrl) || mimeType.isNotBlank()) -> genericUrl
+            resolvedRawUrl.isNotBlank() -> resolvedRawUrl
+            resolvedGenericUrl.isNotBlank() && (isPlayable(resolvedGenericUrl) || mimeType.isNotBlank()) -> resolvedGenericUrl
             else -> ""
         }
-        val explicitPage = field("pageUrl", "page_url", "webUrl", "web_url", "link", "detailUrl")
-        val genericPage = if (genericUrl.isNotBlank() && stream.isBlank()) genericUrl else ""
-        val cover = field(
+        val explicitPage = resolveHttpsUrl(baseUrl, field("pageUrl", "page_url", "webUrl", "web_url", "detailUrl"))
+        val genericPage = if (resolvedGenericUrl.isNotBlank() && stream.isBlank()) resolvedGenericUrl else ""
+        val cover = resolveHttpsUrl(baseUrl, field(
             "coverUrl", "cover_url", "cover", "poster", "posterUrl",
             "poster_url", "thumbnail", "thumb", "image", "imageUrl"
-        )
+        ))
         val pagesValue = firstValue(item, "pages", "pageUrls", "page_urls", "images", "chapterPages", "chapter_pages")
             ?: firstValue(metadata, "pages", "pageUrls", "page_urls", "images")
         val content = field("content", "text", "chapterText", "chapter_text", "body")
-        val textUrl = field("textUrl", "text_url", "readerUrl", "reader_url", "textFile", "downloadUrl")
+        val textUrl = resolveHttpsUrl(baseUrl, field("textUrl", "text_url", "readerUrl", "reader_url", "textFile", "downloadUrl"))
         val title = field("title", "name", "label", "mangaTitle", "animeTitle", "bookTitle")
-        val itemId = field("id", "slug", "key").ifBlank { provider.id + "-" + index }
+        val rawItemId = field("id", "slug", "key").ifBlank { index.toString() }
+        val itemId = provider.id + ":" + rawItemId
         val headersValue = firstValue(item, "headers", "requestHeaders", "request_headers")
             ?: firstValue(metadata, "headers", "requestHeaders", "request_headers")
         val headerObject = headersValue as? JSONObject
@@ -590,58 +628,162 @@ object CatalogService {
             val value = headerObject.optString(key)
             if (validHeader(key, value)) key to value else null
         }?.toMap() ?: emptyMap()
-        val nestedValue = firstValue(item, "episodes", "chapters", "children", "parts")
+        val nestedValue = firstValue(item, "episodes", "chapters", "children", "parts", "seasons")
         val nestedArray = when (nestedValue) {
             is JSONArray -> nestedValue
             is JSONObject -> JSONArray().put(nestedValue)
             else -> JSONArray()
         }
         val children = (0 until nestedArray.length()).mapNotNull { childIndex ->
-            cardFromProviderEntry(nestedArray.opt(childIndex), childIndex, provider, depth + 1)
+            cardFromProviderEntry(nestedArray.opt(childIndex), childIndex, provider, depth + 1, baseUrl)
         }
-
         return MediaCard(
             id = itemId,
             title = title.ifBlank { "Untitled " + (index + 1) },
             subtitle = field("subtitle", "description", "chapter", "episode", "author"),
-            category = field("category", "type", "contentType", "content_type", "mediaType")
-                .ifBlank { provider.category },
+            category = field("category", "type", "contentType", "content_type", "mediaType").ifBlank { provider.category },
             pageUrl = explicitPage.ifBlank { genericPage },
             streamUrl = stream,
             coverUrl = cover,
             description = field("summary", "description", "overview"),
             providerName = provider.name,
-            pages = stringList(pagesValue).filter { it.startsWith("https://", true) },
+            pages = stringList(pagesValue).map { resolveHttpsUrl(baseUrl, it) }.filter { it.isNotBlank() },
             textContent = content,
             textUrl = textUrl,
-            childItems = children.map { child ->
-                if (child.httpHeaders.isEmpty()) child.copy(httpHeaders = headers) else child
-            },
+            childItems = children.map { child -> if (child.httpHeaders.isEmpty()) child.copy(httpHeaders = headers) else child },
             mimeType = mimeType.ifBlank { guessMimeType(stream) },
-            httpHeaders = headers
+            httpHeaders = headers,
+            providerId = provider.id
         )
+    }
+
+    private fun parseHtmlCatalog(html: String, provider: MediaProvider, sourceUrl: String): List<MediaCard> {
+        val document = Jsoup.parse(html, sourceUrl)
+        val documentTitle = document.title().ifBlank { provider.name }
+        val metaDescription = document.selectFirst("meta[name=description], meta[property=og:description]")
+            ?.attr("content")?.trim().orEmpty()
+        val result = mutableListOf<MediaCard>()
+        val seen = mutableSetOf<String>()
+        val blockedLabels = setOf("home", "login", "log in", "sign in", "sign up", "register", "menu", "search", "about", "contact", "privacy policy", "terms", "next", "previous", "read more", "view all")
+        for (anchor in document.select("a[href]").take(240)) {
+            val title = anchor.text().replace(Regex("\\s+"), " ").trim().ifBlank { anchor.attr("title").trim() }
+            if (title.length !in 2..140 || title.lowercase() in blockedLabels) continue
+            val href = resolveHttpsUrl(sourceUrl, anchor.attr("href"))
+            if (href.isBlank() || href.trimEnd('/') == sourceUrl.trimEnd('/') || !seen.add(href)) continue
+            val lowerPath = href.substringBefore("?").lowercase()
+            if (listOf(".css", ".js", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".zip", ".apk").any { lowerPath.endsWith(it) }) continue
+            if (listOf("/login", "/logout", "/register", "/privacy", "/terms").any { lowerPath.contains(it) }) continue
+            val container = anchor.closest("article, li, .card, .item, .post, figure") ?: anchor.parent()
+            val imageElement = container?.selectFirst("img")
+            val imageRaw = imageElement?.let {
+                it.attr("data-src").ifBlank { it.attr("data-original") }
+                    .ifBlank { it.attr("data-lazy-src") }.ifBlank { it.attr("src") }
+            }.orEmpty()
+            val cover = resolveHttpsUrl(sourceUrl, imageRaw)
+            val description = container?.selectFirst("p")?.text()?.trim()?.take(280).orEmpty().ifBlank { metaDescription.take(280) }
+            val mediaUrl = href.takeIf { isPlayable(it) }.orEmpty()
+            result.add(MediaCard(
+                id = provider.id + ":html:" + result.size,
+                title = title,
+                subtitle = provider.category + " • " + provider.name,
+                category = provider.category,
+                pageUrl = if (mediaUrl.isBlank()) href else "",
+                streamUrl = mediaUrl,
+                coverUrl = cover,
+                description = description,
+                providerName = provider.name,
+                mimeType = guessMimeType(mediaUrl),
+                httpHeaders = provider.headers,
+                providerId = provider.id
+            ))
+            if (result.size >= 60) break
+        }
+        if (result.isEmpty()) {
+            val video = document.selectFirst("video[src], video source[src], source[src]")
+            val mediaUrl = resolveHttpsUrl(sourceUrl, video?.attr("src").orEmpty())
+            if (mediaUrl.isNotBlank() && isPlayable(mediaUrl)) {
+                return listOf(MediaCard(
+                    id = provider.id + ":html:video", title = documentTitle,
+                    subtitle = "Direct media found on website", category = provider.category,
+                    streamUrl = mediaUrl, description = metaDescription, providerName = provider.name,
+                    mimeType = guessMimeType(mediaUrl), httpHeaders = provider.headers, providerId = provider.id
+                ))
+            }
+            return listOf(MediaCard(
+                id = provider.id + ":website", title = documentTitle,
+                subtitle = "Website source • " + provider.category, category = provider.category,
+                pageUrl = sourceUrl,
+                description = metaDescription.ifBlank { "This website can be browsed in the in-app browser. Dynamic sites may not expose a catalogue to automatic import." },
+                providerName = provider.name, httpHeaders = provider.headers, providerId = provider.id
+            ))
+        }
+        return result
+    }
+
+    private fun parseRssOrAtom(xml: String, provider: MediaProvider, sourceUrl: String): List<MediaCard> {
+        val document = Jsoup.parse(xml, sourceUrl, Parser.xmlParser())
+        val entries = document.select("item, entry")
+        val cards = entries.take(150).mapIndexedNotNull { index, entry ->
+            val title = entry.selectFirst("title")?.text()?.trim().orEmpty().ifBlank { "Untitled " + (index + 1) }
+            val linkElement = entry.getAllElements().firstOrNull { it.tagName().equals("link", true) }
+            val linkRaw = linkElement?.attr("href").orEmpty().ifBlank { linkElement?.text().orEmpty() }
+            val mediaElement = entry.getAllElements().firstOrNull {
+                it.tagName().equals("enclosure", true) || it.tagName().equals("content", true) || it.tagName().endsWith(":content", true)
+            }
+            val mediaRaw = mediaElement?.attr("url").orEmpty().ifBlank { mediaElement?.attr("href").orEmpty() }
+            val contentType = mediaElement?.attr("type").orEmpty()
+            val linkedUrl = resolveHttpsUrl(sourceUrl, linkRaw)
+            val mediaCandidate = resolveHttpsUrl(sourceUrl, mediaRaw)
+            val mediaUrl = when {
+                mediaCandidate.isNotBlank() && (isPlayable(mediaCandidate) || mimeTypeFromHint(contentType).isNotBlank()) -> mediaCandidate
+                linkedUrl.isNotBlank() && isPlayable(linkedUrl) -> linkedUrl
+                else -> ""
+            }
+            val pageUrl = if (mediaUrl.isBlank()) linkedUrl else ""
+            if (mediaUrl.isBlank() && pageUrl.isBlank()) return@mapIndexedNotNull null
+            val description = entry.selectFirst("description, summary, content")?.text()?.trim()?.take(600).orEmpty()
+            val imageElement = entry.getAllElements().firstOrNull {
+                it.tagName().equals("thumbnail", true) || it.tagName().endsWith(":thumbnail", true)
+            }
+            val coverRaw = imageElement?.attr("url").orEmpty().ifBlank { imageElement?.attr("href").orEmpty() }
+            val cover = resolveHttpsUrl(sourceUrl, coverRaw)
+            val stableId = entry.selectFirst("guid, id")?.text()?.trim().orEmpty().ifBlank { index.toString() }
+            MediaCard(
+                id = provider.id + ":feed:" + stableId,
+                title = title,
+                subtitle = contentType.ifBlank { provider.category + " • " + provider.name },
+                category = provider.category,
+                pageUrl = pageUrl,
+                streamUrl = mediaUrl,
+                coverUrl = cover,
+                description = description,
+                providerName = provider.name,
+                mimeType = mimeTypeFromHint(contentType).ifBlank { guessMimeType(mediaUrl) },
+                httpHeaders = provider.headers,
+                providerId = provider.id
+            )
+        }
+        if (cards.isEmpty()) throw IllegalStateException("The XML feed contains no usable RSS/Atom items. Check that each item has a valid HTTPS link or media enclosure.")
+        return cards
     }
 
     suspend fun fetchProvider(provider: MediaProvider): List<MediaCard> = withContext(Dispatchers.IO) {
         val url = provider.url.trim()
-        val parsedUrl = runCatching { URL(url) }.getOrNull()
-        require(
-            url.startsWith("https://", true) &&
-                parsedUrl?.host?.isNotBlank() == true
-        ) { "Enter a complete HTTPS provider URL." }
+        require(isHttpsUrl(url)) { "Enter a complete HTTPS provider URL." }
 
         val detectedMime = if (isPlayable(url)) guessMimeType(url) else probeStreamMimeType(url, provider.headers)
         if (isPlayable(url) || detectedMime.isNotBlank()) {
             return@withContext listOf(
                 MediaCard(
-                    id = "source-" + provider.id,
+                    id = "source:" + provider.id,
                     title = provider.name,
                     subtitle = "Direct media source",
                     category = provider.category,
                     streamUrl = url,
                     providerName = provider.name,
                     mimeType = detectedMime.ifBlank { guessMimeType(url) },
-                    httpHeaders = provider.headers
+                    httpHeaders = provider.headers,
+                    providerId = provider.id
                 )
             )
         }
@@ -649,31 +791,21 @@ object CatalogService {
         val response = requestDetailed(url, headers = provider.headers)
         if (response.contentType.contains("text/html") || response.body.trimStart().startsWith("<!doctype html", true) ||
             response.body.trimStart().startsWith("<html", true)) {
-            val pageTitle = Regex("<title[^>]*>(.*?)</title>", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
-                .find(response.body)?.groupValues?.getOrNull(1)?.replace(Regex("\\s+"), " ")?.trim()
-            return@withContext listOf(
-                MediaCard(
-                    id = "web-" + provider.id,
-                    title = pageTitle?.takeIf { it.isNotBlank() } ?: provider.name,
-                    subtitle = "Website source • " + provider.category,
-                    category = provider.category,
-                    pageUrl = url,
-                    description = "This source is a website rather than a JSON or M3U feed. Open it inside the app to browse its available content.",
-                    providerName = provider.name
-                )
-            )
+            return@withContext parseHtmlCatalog(response.body, provider, url)
         }
         val text = response.body.removePrefix("\uFEFF").trim()
         if (text.startsWith("#EXTM3U", true)) {
-            return@withContext parseM3u(text, provider).map {
-                attachDetectedMimeTypes(it.copy(httpHeaders = provider.headers))
-            }
+            return@withContext parseM3u(text, provider, url).map { attachDetectedMimeTypes(it) }
+        }
+        if (response.contentType.contains("xml") || text.startsWith("<?xml", true) ||
+            text.startsWith("<rss", true) || text.startsWith("<feed", true)) {
+            return@withContext parseRssOrAtom(text, provider, url)
         }
 
         val payload = parseJsonValue(text)
         val array = arrayFromPayload(payload)
         val parsedCards = (0 until array.length()).mapNotNull { index ->
-            cardFromProviderEntry(array.opt(index), index, provider)
+            cardFromProviderEntry(array.opt(index), index, provider, baseUrl = url)
         }
         val cards = parsedCards.map { card ->
             attachDetectedMimeTypes(withFallbackHeaders(card, provider.headers))
@@ -700,18 +832,70 @@ object CatalogService {
         return card.copy(mimeType = detected.ifBlank { guessMimeType(card.streamUrl) }, childItems = children)
     }
 
-    private fun parseM3u(text: String, provider: MediaProvider): List<MediaCard> {
+    private fun parseM3u(text: String, provider: MediaProvider, baseUrl: String): List<MediaCard> {
         val result = mutableListOf<MediaCard>()
         var title = provider.name
+        var cover = ""
+        var group = ""
         var index = 0
+        val entryHeaders = linkedMapOf<String, String>()
         text.lineSequence().map { it.trim() }.filter { it.isNotBlank() }.forEach { line ->
-            if (line.startsWith("#EXTINF", true)) title = line.substringAfter(",", "Stream").trim().ifBlank { "Stream" }
-            else if (line.startsWith("https://", true)) {
-                result.add(MediaCard(provider.id + "-" + index++, title, "Playlist • " + provider.name,
-                    provider.category, streamUrl = line, providerName = provider.name))
-                title = provider.name
+            when {
+                line.startsWith("#EXTINF", true) -> {
+                    title = line.substringAfter(",", "").trim().ifBlank {
+                        Regex("""tvg-name="([^"]+)"""").find(line)?.groupValues?.getOrNull(1) ?: "Stream " + (index + 1)
+                    }
+                    cover = Regex("""tvg-logo="([^"]+)"""").find(line)?.groupValues?.getOrNull(1).orEmpty()
+                    group = Regex("""group-title="([^"]+)"""").find(line)?.groupValues?.getOrNull(1).orEmpty()
+                }
+                line.startsWith("#EXTVLCOPT:", true) -> {
+                    val option = line.substringAfter(":")
+                    val key = option.substringBefore("=").trim().lowercase()
+                    val value = option.substringAfter("=", "").trim()
+                    val headerName = when (key) {
+                        "http-referrer", "http-referer" -> "Referer"
+                        "http-origin" -> "Origin"
+                        "http-user-agent" -> "User-Agent"
+                        "http-cookie" -> "Cookie"
+                        else -> ""
+                    }
+                    if (headerName.isNotBlank() && isValidMediaHeader(headerName, value)) entryHeaders[headerName] = value
+                }
+                line.startsWith("#EXTHTTP:", true) -> {
+                    val rawHeaders = line.substringAfter(":").trim()
+                    runCatching { JSONObject(rawHeaders) }.getOrNull()?.let { json ->
+                        json.keys().forEach { key ->
+                            val value = json.optString(key)
+                            if (isValidMediaHeader(key, value)) entryHeaders[key] = value
+                        }
+                    }
+                }
+                line.startsWith("#") -> Unit
+                else -> {
+                    val streamUrl = resolveHttpsUrl(baseUrl, line)
+                    if (streamUrl.isNotBlank()) {
+                        val headers = provider.headers + entryHeaders
+                        result.add(MediaCard(
+                            id = provider.id + ":m3u:" + index++,
+                            title = title.ifBlank { "Stream" },
+                            subtitle = listOf(group, provider.name).filter { it.isNotBlank() }.joinToString(" • "),
+                            category = provider.category,
+                            streamUrl = streamUrl,
+                            coverUrl = resolveHttpsUrl(baseUrl, cover),
+                            providerName = provider.name,
+                            mimeType = guessMimeType(streamUrl),
+                            httpHeaders = headers,
+                            providerId = provider.id
+                        ))
+                    }
+                    title = provider.name
+                    cover = ""
+                    group = ""
+                    entryHeaders.clear()
+                }
             }
         }
+        if (result.isEmpty()) throw IllegalStateException("The M3U playlist contains no usable HTTPS media links.")
         return result
     }
 
@@ -734,6 +918,12 @@ object CatalogService {
             path.endsWith(".mpd") -> "application/dash+xml"
             path.endsWith(".mp4") || path.endsWith(".m4v") -> "video/mp4"
             path.endsWith(".webm") -> "video/webm"
+            path.endsWith(".mp3") -> "audio/mpeg"
+            path.endsWith(".m4a") -> "audio/mp4"
+            path.endsWith(".aac") -> "audio/aac"
+            path.endsWith(".ogg") || path.endsWith(".oga") -> "audio/ogg"
+            path.endsWith(".opus") -> "audio/opus"
+            path.endsWith(".wav") -> "audio/wav"
             else -> ""
         }
     }
@@ -769,10 +959,16 @@ object CatalogService {
         "dash", "mpd", "application/dash+xml" -> "application/dash+xml"
         "mp4", "video/mp4" -> "video/mp4"
         "webm", "video/webm" -> "video/webm"
-        else -> hint.takeIf { it.startsWith("video/") } ?: ""
+        "mp3", "audio/mpeg" -> "audio/mpeg"
+        "m4a", "audio/mp4" -> "audio/mp4"
+        "aac", "audio/aac" -> "audio/aac"
+        "ogg", "oga", "audio/ogg" -> "audio/ogg"
+        "opus", "audio/opus" -> "audio/opus"
+        "wav", "audio/wav" -> "audio/wav"
+        else -> hint.takeIf { it.startsWith("video/") || it.startsWith("audio/") } ?: ""
     }
     fun isDownloadable(url: String): Boolean {
         val u = url.lowercase().substringBefore("?")
-        return u.endsWith(".mp4") || u.endsWith(".webm") || u.endsWith(".m4v")
+        return listOf(".mp4", ".webm", ".m4v", ".mp3", ".m4a", ".aac", ".ogg", ".oga", ".opus", ".wav").any { u.endsWith(it) }
     }
 }
