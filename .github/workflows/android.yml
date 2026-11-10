@@ -83,12 +83,11 @@ jobs:
           name: All IN ONE Media v0.4.1 (build ${{ github.run_number }})
           body: |
             All IN ONE Media v0.4.1.
-            Adds nested episode/chapter provider feeds, MIME-aware MP4/HLS/DASH playback, MangaDex chapter reading, public-domain Gutenberg book text, Internet Archive MP4 playback, and an in-app HTTPS browser.
-            This does not execute Mihon, Aniyomi, CloudStream, or LNReader extension packages. See README and provider documentation for compatibility.
-            This build keeps the separate application ID and uses temporary debug signing unless stable signing secrets are configured.
-            This build uses a fresh application ID so it can install alongside older builds signed with an unrecoverable temporary CI key.
+            Provider imports now resolve relative links, support RSS/Atom feeds, extract basic server-rendered website listings, honour M3U per-stream headers, and handle common audio formats as well as video. The MangaDex reader now falls back to data-saver pages when full-resolution pages are not returned.
+            Third-party Mihon/Komikku, Aniyomi, CloudStream, LNReader and Mangayomi plugin packages are still not executable in this app; their distinct runtimes are not interchangeable with catalogue feeds.
+            Application ID: com.allinonemedia.app.v041. This is a separate install from v0.4.0 because the CI signing key is temporary unless a stable keystore is configured. It does not migrate local providers/library data from the older app.
             Signing mode: ${{ steps.build.outputs.signing_mode }}.
-            Configure KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS and KEY_PASSWORD repository Actions secrets to make future updates install over this version.
+            Configure KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS and KEY_PASSWORD repository Actions secrets to enable stable in-place updates for future builds.
           files: dist/All-IN-ONE-Media.apk
           make_latest: true
           draft: false
