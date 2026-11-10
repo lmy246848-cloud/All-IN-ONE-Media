@@ -784,7 +784,7 @@ private fun ProviderManagerScreen(
 
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         Text("Extensions & Providers", color = foreground, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
-        Text("Add a source link, apply it, then sync its titles.", color = secondary, fontSize = 12.sp)
+        Text("Add a compatible feed or media link, Sync it, then open a title to read or watch.", color = secondary, fontSize = 12.sp)
         Spacer(Modifier.height(11.dp))
         Card(
             modifier = Modifier.fillMaxWidth().liquidGlass(RoundedCornerShape(22.dp)),
@@ -820,7 +820,7 @@ private fun ProviderManagerScreen(
                     shape = RoundedCornerShape(15.dp)
                 )
                 Text(
-                    "Paste a supported HTTPS JSON feed, M3U playlist, or direct MP4/HLS link. The name is optional.",
+                    "Use an HTTPS JSON catalogue, M3U playlist, direct video URL, or website page. Mihon / Aniyomi / CloudStream plugin repository links are not compatible feed URLs. The name is optional.",
                     color = secondary, fontSize = 10.sp
                 )
                 if (error.isNotBlank()) Text(error, color = Pink, fontSize = 11.sp)
@@ -859,7 +859,7 @@ private fun ProviderManagerScreen(
         if (message.isNotBlank()) Text(message, color = if (message.startsWith("Could not load", true)) Pink else Aqua, fontSize = 11.sp, modifier = Modifier.padding(vertical = 8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Your extensions (" + providers.size + ")", color = foreground, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-            Text("Tap Sync after adding", color = secondary, fontSize = 10.sp)
+            Text("Sync, then tap Open / Read / Watch", color = secondary, fontSize = 10.sp)
         }
         if (providers.isEmpty()) {
             Text("No extensions added yet. Paste a source link above and press Apply / Add extension.", color = secondary, fontSize = 11.sp, modifier = Modifier.padding(vertical = 8.dp))
