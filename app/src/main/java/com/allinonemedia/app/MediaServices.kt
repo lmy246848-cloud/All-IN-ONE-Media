@@ -217,7 +217,6 @@ object CatalogService {
                 .filter { it.startsWith("text/plain", true) }
                 .map { formats.optString(it) }
                 .firstOrNull { it.startsWith("https://", true) }.orEmpty()
-            val htmlUrl = formats.optString("text/html")
             val authors = book.optJSONArray("authors") ?: JSONArray()
             val author = (0 until authors.length()).mapNotNull { authors.optJSONObject(it)?.optString("name") }
                 .filter { it.isNotBlank() }.joinToString(", ")
@@ -625,13 +624,13 @@ object CatalogService {
         var index = 0
         text.lineSequence().map { it.trim() }.filter { it.isNotBlank() }.forEach { line ->
             if (line.startsWith("#EXTINF", true)) title = line.substringAfter(",", "Stream").trim().ifBlank { "Stream" }
-            else if (line.startsWith("https://", true) && isPlayable(line)) {
+            else if (line.startsWith("https://", true)) {
                 result.add(MediaCard(provider.id + "-" + index++, title, "Playlist • " + provider.name,
                     provider.category, streamUrl = line, providerName = provider.name))
                 title = provider.name
             }
         }
-        return result
+        return result.map { attachDetectedMimeTypes(it) }
     }
 
     private fun isHttpsUrl(value: String): Boolean =
@@ -676,7 +675,7 @@ object CatalogService {
         "dash", "mpd", "application/dash+xml" -> "application/dash+xml"
         "mp4", "video/mp4" -> "video/mp4"
         "webm", "video/webm" -> "video/webm"
-        else -> hint.takeIf { it.contains("/") } ?: ""
+        else -> hint.takeIf { it.startsWith("video/") } ?: ""
     }
     fun isDownloadable(url: String): Boolean {
         val u = url.lowercase().substringBefore("?")
