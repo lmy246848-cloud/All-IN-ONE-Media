@@ -15,13 +15,15 @@ data class MediaCard(
     val pageUrl: String = "", val streamUrl: String = "", val coverUrl: String = "",
     val description: String = "", val providerName: String = "",
     val pages: List<String> = emptyList(), val textContent: String = "",
-    val textUrl: String = "", val childItems: List<MediaCard> = emptyList()
+    val textUrl: String = "", val childItems: List<MediaCard> = emptyList(),
+    val mimeType: String = ""
 ) {
     fun toJson() = JSONObject().put("id", id).put("title", title).put("subtitle", subtitle)
         .put("category", category).put("pageUrl", pageUrl).put("streamUrl", streamUrl)
         .put("coverUrl", coverUrl).put("description", description).put("providerName", providerName)
         .put("pages", JSONArray(pages)).put("content", textContent).put("textUrl", textUrl)
         .put("children", JSONArray().apply { childItems.forEach { put(it.toJson()) } })
+        .put("mimeType", mimeType)
 
     companion object {
         fun fromJson(o: JSONObject) = MediaCard(
@@ -33,7 +35,8 @@ data class MediaCard(
             o.optString("content"), o.optString("textUrl"),
             o.optJSONArray("children")?.let { a ->
                 (0 until a.length()).mapNotNull { i -> a.optJSONObject(i)?.let(::fromJson) }
-            } ?: emptyList()
+            } ?: emptyList(),
+            o.optString("mimeType")
         )
     }
 }
@@ -94,9 +97,10 @@ object CatalogService {
         val connection = URL(url).openConnection() as HttpURLConnection
         try {
             connection.requestMethod = method
+            connection.instanceFollowRedirects = true
             connection.connectTimeout = 15000
             connection.readTimeout = 20000
-            connection.setRequestProperty("User-Agent", "AllInOneMedia/0.3 Android")
+            connection.setRequestProperty("User-Agent", "AllInOneMedia/0.4 Android")
             connection.setRequestProperty("Accept", "application/json, application/x-mpegURL, audio/x-mpegurl, */*")
             if (body != null) {
                 connection.doOutput = true
@@ -490,7 +494,11 @@ object CatalogService {
             "video_url", "file", "src", "hls", "mp4"
         )
         val genericUrl = field("url", "link", "sourceUrl", "source_url")
-        val stream = (rawUrl.ifBlank { genericUrl }).takeIf { isPlayable(it) } ?: ""
+        val stream = when {
+            rawUrl.isNotBlank() && isHttpsUrl(rawUrl) -> rawUrl
+            genericUrl.isNotBlank() && isPlayable(genericUrl) -> genericUrl
+            else -> ""
+        }
         val explicitPage = field("pageUrl", "page_url", "webUrl", "web_url", "link", "detailUrl")
         val genericPage = if (genericUrl.isNotBlank() && stream.isBlank()) genericUrl else ""
         val cover = field(
@@ -501,6 +509,7 @@ object CatalogService {
             ?: firstValue(metadata, "pages", "pageUrls", "page_urls", "images")
         val content = field("content", "text", "chapterText", "chapter_text", "body")
         val textUrl = field("textUrl", "text_url", "readerUrl", "reader_url", "textFile", "downloadUrl")
+        val mimeType = mimeTypeFromHint(field("mimeType", "mime_type", "streamMimeType", "stream_mime_type"))
         val title = field("title", "name", "label", "mangaTitle", "animeTitle", "bookTitle")
         val itemId = field("id", "slug", "key").ifBlank { provider.id + "-" + index }
         val nestedValue = firstValue(item, "episodes", "chapters", "children", "parts")
@@ -527,7 +536,8 @@ object CatalogService {
             pages = stringList(pagesValue).filter { it.startsWith("https://", true) },
             textContent = content,
             textUrl = textUrl,
-            childItems = children
+            childItems = children,
+            mimeType = mimeType.ifBlank { guessMimeType(stream) }
         )
     }
 
@@ -539,7 +549,8 @@ object CatalogService {
                 parsedUrl?.host?.isNotBlank() == true
         ) { "Enter a complete HTTPS provider URL." }
 
-        if (isPlayable(url)) {
+        val detectedMime = if (isPlayable(url)) guessMimeType(url) else probeStreamMimeType(url)
+        if (isPlayable(url) || detectedMime.isNotBlank()) {
             return@withContext listOf(
                 MediaCard(
                     id = "source-" + provider.id,
@@ -547,7 +558,8 @@ object CatalogService {
                     subtitle = "Direct media source",
                     category = provider.category,
                     streamUrl = url,
-                    providerName = provider.name
+                    providerName = provider.name,
+                    mimeType = detectedMime.ifBlank { guessMimeType(url) }
                 )
             )
         }
@@ -585,9 +597,49 @@ object CatalogService {
         return result
     }
 
-    fun isPlayable(url: String): Boolean {
-        val u = url.lowercase().substringBefore("?").substringBefore("#")
-        return u.endsWith(".mp4") || u.endsWith(".m3u8") || u.endsWith(".mpd") || u.endsWith(".webm") || u.endsWith(".m4v")
+    private fun isHttpsUrl(value: String): Boolean =
+        value.startsWith("https://", true) && runCatching { URL(value).host.isNotBlank() }.getOrDefault(false)
+
+    private fun guessMimeType(url: String): String {
+        val path = url.lowercase().substringBefore("?").substringBefore("#")
+        return when {
+            path.endsWith(".m3u8") -> "application/x-mpegURL"
+            path.endsWith(".mpd") -> "application/dash+xml"
+            path.endsWith(".mp4") || path.endsWith(".m4v") -> "video/mp4"
+            path.endsWith(".webm") -> "video/webm"
+            else -> ""
+        }
+    }
+
+    private fun probeStreamMimeType(url: String): String {
+        if (!isHttpsUrl(url)) return ""
+        return try {
+            val connection = URL(url).openConnection() as HttpURLConnection
+            try {
+                connection.requestMethod = "HEAD"
+                connection.instanceFollowRedirects = true
+                connection.connectTimeout = 8000
+                connection.readTimeout = 8000
+                connection.setRequestProperty("User-Agent", "AllInOneMedia/0.4 Android")
+                val code = connection.responseCode
+                val type = connection.contentType?.substringBefore(";")?.trim()?.lowercase().orEmpty()
+                if (code in 200..299 && (
+                    type.startsWith("video/") ||
+                    type.contains("mpegurl") ||
+                    type.contains("dash+xml")
+                )) type else ""
+            } finally { connection.disconnect() }
+        } catch (_: Exception) { "" }
+    }
+
+    fun isPlayable(url: String): Boolean = guessMimeType(url).isNotBlank()
+
+    fun mimeTypeFromHint(hint: String): String = when (hint.lowercase().substringBefore(";").trim()) {
+        "hls", "m3u8", "application/vnd.apple.mpegurl", "application/x-mpegurl" -> "application/x-mpegURL"
+        "dash", "mpd", "application/dash+xml" -> "application/dash+xml"
+        "mp4", "video/mp4" -> "video/mp4"
+        "webm", "video/webm" -> "video/webm"
+        else -> hint.takeIf { it.contains("/") } ?: ""
     }
     fun isDownloadable(url: String): Boolean {
         val u = url.lowercase().substringBefore("?")
