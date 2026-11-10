@@ -108,7 +108,7 @@ A novel chapter can provide inline text or a plain-text URL:
 | `coverUrl`, `poster`, `thumbnail`, `image` | Artwork |
 | `streamUrl`, `playUrl`, `videoUrl`, `file`, `src`, `hls`, `mp4` | Direct video URL |
 | `mimeType`, `mime_type`, `streamMimeType`, `format` | Optional stream MIME type |
-| `headers`, `requestHeaders` | Optional HTTP headers for that stream, such as Referer or User-Agent |
+| `headers`, `requestHeaders` | Optional HTTP headers for the stream, such as Referer, Origin, User-Agent, or Authorization |
 | `pageUrl`, `webUrl`, `detailUrl`, `link` | Website page |
 | `pages`, `pageUrls`, `images` | Manga/comic image pages |
 | `content`, `text`, `chapterText`, `body` | Inline readable text |
