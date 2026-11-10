@@ -819,14 +819,13 @@ private fun SettingsScreen(
 private fun ReaderDialog(item: MediaCard, onDismiss: () -> Unit) {
     var pageIndex by remember(item.id) { mutableIntStateOf(0) }
     var fontSize by remember(item.id) { mutableFloatStateOf(17f) }
-    var showReaderControls by remember(item.id) { mutableStateOf(true) }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(
             modifier = Modifier.fillMaxWidth().fillMaxHeight(0.94f).padding(8.dp),
             shape = RoundedCornerShape(20.dp),
             color = Color(0xFF100D19)
         ) {
-            Column(Modifier.fillMaxWidth().padding(14.dp)) {
+            Column(Modifier.fillMaxSize().padding(14.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(item.title, color = Color.White, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
