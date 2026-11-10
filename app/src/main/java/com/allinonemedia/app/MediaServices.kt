@@ -362,10 +362,16 @@ object CatalogService {
         return when (value) {
             is JSONArray -> value
             is JSONObject -> {
+                if (value.has("extensions") || value.has("sources")) {
+                    throw IllegalStateException(
+                        "This URL is an extension repository, not a playable All IN ONE Media catalogue. Mihon, Aniyomi, CloudStream, and LNReader plugins need their own runtime and cannot be installed by pasting the repository URL here. Add a compatible JSON feed, M3U playlist, or direct stream URL instead."
+                    )
+                }
                 val wrapperKeys = listOf(
                     "items", "results", "data", "titles", "entries", "list",
                     "catalog", "catalogue", "manga", "anime", "books", "streams",
-                    "response", "payload", "chapters", "episodes"
+                    "response", "payload", "chapters", "episodes", "videos", "movies",
+                    "series", "channels"
                 )
                 for (key in wrapperKeys) {
                     if (!value.has(key) || value.isNull(key)) continue
@@ -490,8 +496,8 @@ object CatalogService {
         }
 
         val rawUrl = field(
-            "streamUrl", "stream_url", "playUrl", "play_url", "videoUrl",
-            "video_url", "file", "src", "hls", "mp4"
+            "streamUrl", "stream_url", "playUrl", "play_url", "playbackUrl",
+            "playback_url", "videoUrl", "video_url", "stream", "file", "src", "hls", "mp4"
         )
         val genericUrl = field("url", "link", "sourceUrl", "source_url")
         val stream = when {
@@ -571,15 +577,24 @@ object CatalogService {
 
         val payload = parseJsonValue(text)
         val array = arrayFromPayload(payload)
-        val cards = (0 until array.length()).mapNotNull { index ->
+        val parsedCards = (0 until array.length()).mapNotNull { index ->
             cardFromProviderEntry(array.opt(index), index, provider)
         }
+        val cards = parsedCards.map { attachDetectedMimeTypes(it) }
         if (cards.isEmpty()) {
             throw IllegalStateException(
                 "The source returned valid data, but no title entries could be read. Check that the feed contains title, name, URL, or stream fields."
             )
         }
         cards
+    }
+
+    private fun attachDetectedMimeTypes(card: MediaCard): MediaCard {
+        val children = card.childItems.map { attachDetectedMimeTypes(it) }
+        val detected = if (card.streamUrl.isNotBlank() && card.mimeType.isBlank()) {
+            probeStreamMimeType(card.streamUrl)
+        } else card.mimeType
+        return card.copy(mimeType = detected.ifBlank { guessMimeType(card.streamUrl) }, childItems = children)
     }
 
     private fun parseM3u(text: String, provider: MediaProvider): List<MediaCard> {
