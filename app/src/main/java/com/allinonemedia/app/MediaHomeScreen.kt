@@ -1245,9 +1245,9 @@ private fun InAppBrowserDialog(title: String, url: String, onDismiss: () -> Unit
 @Composable
 private fun VideoPlayerDialog(item: MediaCard, onDismiss: () -> Unit) {
     val context = LocalContext.current
-    var playbackError by remember(item.streamUrl) { mutableStateOf("") }
-    var buffering by remember(item.streamUrl) { mutableStateOf(true) }
-    val player = remember(item.streamUrl, item.mimeType) {
+    var playbackError by remember(item.streamUrl, item.mimeType, item.httpHeaders) { mutableStateOf("") }
+    var buffering by remember(item.streamUrl, item.mimeType, item.httpHeaders) { mutableStateOf(true) }
+    val player = remember(item.streamUrl, item.mimeType, item.httpHeaders) {
         val httpFactory = DefaultHttpDataSource.Factory()
             .setUserAgent("AllInOneMedia/0.4 Android")
             .setDefaultRequestProperties(item.httpHeaders)
