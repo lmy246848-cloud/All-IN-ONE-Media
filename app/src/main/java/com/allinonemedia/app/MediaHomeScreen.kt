@@ -61,7 +61,10 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.media3.common.MediaItem as PlayerMediaItem
+import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
 import kotlinx.coroutines.delay
@@ -657,7 +660,7 @@ private fun ShortVideoCard(
                 IconButton(onClick = { onSave(item) }) {
                     Icon(Icons.Filled.Bookmark, contentDescription = "Save", tint = if (saved) Aqua else SoftText)
                 }
-                if (CatalogService.isDownloadable(item.streamUrl)) {
+                if (CatalogService.isDownloadable(item.streamUrl) && item.httpHeaders.isEmpty()) {
                     IconButton(onClick = { onDownload(item) }) {
                         Icon(Icons.Filled.Download, contentDescription = "Download", tint = Aqua)
                     }
@@ -1239,12 +1242,19 @@ private fun InAppBrowserDialog(title: String, url: String, onDismiss: () -> Unit
 }
 
 @Composable
+@OptIn(androidx.media3.common.util.UnstableApi::class)
+@Composable
 private fun VideoPlayerDialog(item: MediaCard, onDismiss: () -> Unit) {
     val context = LocalContext.current
     var playbackError by remember(item.streamUrl) { mutableStateOf("") }
     var buffering by remember(item.streamUrl) { mutableStateOf(true) }
     val player = remember(item.streamUrl, item.mimeType) {
-        ExoPlayer.Builder(context).build().apply {
+        val httpFactory = DefaultHttpDataSource.Factory()
+            .setUserAgent("AllInOneMedia/0.4 Android")
+            .setDefaultRequestProperties(item.httpHeaders)
+        val dataSourceFactory = DefaultDataSource.Factory(context, httpFactory)
+        val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
+        ExoPlayer.Builder(context).setMediaSourceFactory(mediaSourceFactory).build().apply {
             val mediaBuilder = PlayerMediaItem.Builder().setUri(item.streamUrl)
             if (item.mimeType.isNotBlank()) mediaBuilder.setMimeType(item.mimeType)
             setMediaItem(mediaBuilder.build())
