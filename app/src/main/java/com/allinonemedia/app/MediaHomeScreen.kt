@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Environment
+import android.widget.Toast
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -808,7 +809,7 @@ private fun SettingsScreen(
             }
         }
         Spacer(Modifier.height(10.dp))
-        Text("All IN ONE Media • Version 0.2.0", color = secondary, fontSize = 11.sp)
+        Text("All IN ONE Media • Version 0.3.0", color = secondary, fontSize = 11.sp)
         Text("Your library, providers, and settings are stored locally on this device.", color = secondary, fontSize = 10.sp)
     }
 }
@@ -920,7 +921,10 @@ private fun VideoPlayerDialog(item: MediaCard, onDismiss: () -> Unit) {
 
 private fun downloadMedia(context: Context, item: MediaCard) {
     val url = item.streamUrl
-    if (!CatalogService.isDownloadable(url)) return
+    if (!CatalogService.isDownloadable(url)) {
+        Toast.makeText(context, "This source does not provide a downloadable direct file.", Toast.LENGTH_SHORT).show()
+        return
+    }
     try {
         val safeName = item.title.replace(Regex("[^A-Za-z0-9._-]"), "_").take(70).ifBlank { "media" }
         val extension = url.substringBefore("?").substringAfterLast(".", "mp4")
@@ -931,5 +935,8 @@ private fun downloadMedia(context: Context, item: MediaCard) {
             .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "AllINONEMedia_" + safeName + "." + extension)
         val manager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
         manager.enqueue(request)
-    } catch (_: Exception) { }
+        Toast.makeText(context, "Download added to Android Downloads.", Toast.LENGTH_SHORT).show()
+    } catch (e: Exception) {
+        Toast.makeText(context, "Download failed: " + (e.message ?: "unknown error"), Toast.LENGTH_LONG).show()
+    }
 }
