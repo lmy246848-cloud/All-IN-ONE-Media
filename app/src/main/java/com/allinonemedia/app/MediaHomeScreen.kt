@@ -138,7 +138,7 @@ fun AllInOneApp() {
         ) else lightColorScheme(primary = Color(0xFF7143B8), secondary = Color(0xFF168F87))
     ) {
         Scaffold(
-            containerColor = background,
+            containerColor = Color.Transparent,
             bottomBar = {
                 NavigationBar(containerColor = surface.copy(alpha = 0.68f), tonalElevation = 0.dp) {
                     listOf("Home", "Discover", "Library", "Extensions", "Settings").forEach { tab ->
@@ -170,7 +170,8 @@ fun AllInOneApp() {
                 ) {
                     Box(
                         Modifier.size(38.dp).clip(RoundedCornerShape(13.dp))
-                            .background(Brush.linearGradient(listOf(Purple, Pink, Color(0xFF6332D8)))),
+                            .background(Brush.linearGradient(listOf(Purple, Pink, Color(0xFF6332D8))))
+                            .border(1.dp, Color.White.copy(alpha = 0.42f), RoundedCornerShape(13.dp)),
                         contentAlignment = Alignment.Center
                     ) { Text("A", color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Black) }
                     Spacer(Modifier.width(10.dp))
