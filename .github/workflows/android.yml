@@ -70,11 +70,13 @@ jobs:
         if: github.ref == 'refs/heads/scratch-rebuild'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v0.3.3-build-${{ github.run_number }}
-          name: All IN ONE Media v0.3.3 (build ${{ github.run_number }})
+          tag_name: v0.4.0-build-${{ github.run_number }}
+          name: All IN ONE Media v0.4.0 (build ${{ github.run_number }})
           body: |
-            All IN ONE Media v0.3.3.
-            Provider parsing now accepts nested and JSON-encoded feeds, string entries and string page lists. The interface uses translucent glass panels and ambient gradient lighting.
+            All IN ONE Media v0.4.0.
+            Adds nested episode/chapter provider feeds, MIME-aware MP4/HLS/DASH playback, MangaDex chapter reading, public-domain Gutenberg book text, Internet Archive MP4 playback, and an in-app HTTPS browser.
+            This does not execute Mihon, Aniyomi, CloudStream, or LNReader extension packages. See README and provider documentation for compatibility.
+            This build keeps the separate application ID and uses temporary debug signing unless stable signing secrets are configured.
             This build uses a fresh application ID so it can install alongside older builds signed with an unrecoverable temporary CI key.
             Signing mode: ${{ steps.build.outputs.signing_mode }}.
             Configure KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS and KEY_PASSWORD repository Actions secrets to make future updates install over this version.
@@ -90,6 +92,6 @@ jobs:
       - name: Keep Actions artifact
         uses: actions/upload-artifact@v4
         with:
-          name: All-IN-ONE-Media-v0.3.3-APK
+          name: All-IN-ONE-Media-v0.4.0-APK
           path: dist/All-IN-ONE-Media.apk
           if-no-files-found: error
