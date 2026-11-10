@@ -9,7 +9,7 @@ All IN ONE Media is an Android media hub for searching titles, adding compatible
 - Public-domain book discovery through Project Gutenberg / Gutendex, with an in-app text reader.
 - Public-domain movie search through Internet Archive licence metadata, with MP4 resolution and in-app playback when an MP4 derivative exists.
 - TV-series metadata search through TMDB after you supply a TMDB API key. TMDB is metadata only; it does not supply video.
-- Manual HTTPS providers that return JSON catalogues, nested episodes/chapters, M3U playlists, or direct video streams.
+- Manual HTTPS providers that return JSON catalogues, nested episodes/chapters, M3U playlists, or direct video streams, including per-stream MIME types and optional HTTP request headers.
 - Nested episode and chapter selection in title details.
 - In-app HTTPS browser for source pages that don't expose direct media URLs.
 - Media3 playback for MP4, WebM, M4V, HLS/M3U8 and DASH/MPD, with MIME-type support for signed stream URLs.
