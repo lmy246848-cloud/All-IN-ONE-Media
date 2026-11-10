@@ -1,0 +1,86 @@
+name: Build All IN ONE Media (Android ARM64)
+
+on:
+  push:
+    branches:
+      - all-in-one-media
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  android-arm64:
+    name: Build Android ARM64 APK
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Check out project
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install SVG renderer
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y librsvg2-bin fonts-dejavu-core
+
+      - name: Prepare All IN ONE Media source
+        run: |
+          python3 scripts/prepare_all_in_one_media.py
+          rsvg-convert --width 512 --height 512 assets/icon/all_in_one_media.svg > assets/icon/app_icon.png
+          rsvg-convert --width 620 --height 90 assets/icon/all_in_one_wordmark.svg > assets/icon/wordmark.png
+
+      - name: Resolve Flutter dependencies
+        run: flutter pub get
+
+      - name: Check and format the new Shorts screen
+        run: dart format lib/features/short_drama/short_drama_screen.dart
+
+      - name: Generate app launcher icons
+        run: dart run flutter_launcher_icons
+
+      - name: Build release APK (ARM64)
+        env:
+          GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.parallel=false -Dorg.gradle.workers.max=2
+        run: flutter build apk --release --target-platform android-arm64
+
+      - name: Rename APK
+        run: |
+          cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/All-IN-ONE-Media-1.0.0-arm64.apk
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: All-IN-ONE-Media-1.0.0-arm64
+          path: build/app/outputs/flutter-apk/All-IN-ONE-Media-1.0.0-arm64.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish GitHub prerelease
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: all-in-one-media-v1.0.0-build-${{ github.run_number }}
+          name: All IN ONE Media 1.0.0 (build ${{ github.run_number }})
+          body: |
+            ARM64 Android test build of All IN ONE Media.
+            Package: com.allinonemedia.entertainment
+            Short Dramas uses user-added JSON feeds with direct MP4/HLS URLs.
+            The upstream author's cloud services and Discord SDK integration are disabled in this fork.
+            Source and notices are available in this repository under GPL-3.0 and third-party licences.
+          files: build/app/outputs/flutter-apk/All-IN-ONE-Media-1.0.0-arm64.apk
+          prerelease: true
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
