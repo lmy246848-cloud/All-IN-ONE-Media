@@ -18,6 +18,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -82,6 +84,7 @@ fun AllInOneApp() {
     var syncingId by remember { mutableStateOf("") }
     var syncMessage by remember { mutableStateOf("") }
     var activeVideo by remember { mutableStateOf<MediaCard?>(null) }
+    var activeReader by remember { mutableStateOf<MediaCard?>(null) }
 
     LaunchedEffect(Unit) { delay(1250); showSplash = false }
 
@@ -99,6 +102,11 @@ fun AllInOneApp() {
     fun openExternal(url: String) {
         if (url.isBlank()) return
         try { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } catch (_: Exception) { }
+    }
+
+    fun openItem(item: MediaCard) {
+        if (item.pages.isNotEmpty() || item.textContent.isNotBlank()) activeReader = item
+        else openExternal(item.pageUrl)
     }
 
     fun syncProvider(provider: MediaProvider) {
@@ -181,12 +189,12 @@ fun AllInOneApp() {
                         "Discover" -> DiscoverScreen(
                             initialCategory = discoverCategory, providerItems = sourceItems, tmdbKey = tmdbKey,
                             libraryIds = library.map { it.id }.toSet(),
-                            onSave = { toggleLibrary(it) }, onOpen = { openExternal(it.pageUrl) },
+                            onSave = { toggleLibrary(it) }, onOpen = { openItem(it) },
                             onPlay = { activeVideo = it }, onDownload = { downloadMedia(context, it) }
                         )
                         "Library" -> LibraryScreen(
                             savedItems = library, foreground = foreground, secondary = secondary,
-                            surface = surface, onOpen = { openExternal(it.pageUrl) },
+                            surface = surface, onOpen = { openItem(it) },
                             onPlay = { activeVideo = it },
                             onRemove = { item ->
                                 library = library.filterNot { it.id == item.id }
@@ -203,7 +211,7 @@ fun AllInOneApp() {
                                 sourceItems = sourceItems.filterNot { it.providerName == provider.name }
                                 store.saveSourceItems(sourceItems)
                             },
-                            onSync = { syncProvider(it) }, onOpen = { openExternal(it.pageUrl) },
+                            onSync = { syncProvider(it) }, onOpen = { openItem(it) },
                             onPlay = { activeVideo = it }, onDownload = { downloadMedia(context, it) },
                             libraryIds = library.map { it.id }.toSet(), onSave = { toggleLibrary(it) }
                         )
@@ -223,6 +231,7 @@ fun AllInOneApp() {
         }
     }
     activeVideo?.let { item -> VideoPlayerDialog(item = item, onDismiss = { activeVideo = null }) }
+    activeReader?.let { item -> ReaderDialog(item = item, onDismiss = { activeReader = null }) }
 }
 
 @Composable
@@ -520,7 +529,7 @@ private fun MediaCardRow(
                     if (item.streamUrl.isNotBlank()) {
                         IconButton(onClick = { onPlay(item) }) { Icon(Icons.Filled.PlayArrow, contentDescription = "Play", tint = Purple) }
                     } else {
-                        IconButton(onClick = { onOpen(item) }, enabled = item.pageUrl.isNotBlank()) {
+                        IconButton(onClick = { onOpen(item) }, enabled = item.pageUrl.isNotBlank() || item.pages.isNotEmpty() || item.textContent.isNotBlank()) {
                             Icon(Icons.Filled.Explore, contentDescription = "Open details", tint = Purple)
                         }
                     }
@@ -707,6 +716,45 @@ private fun SettingsScreen(
         Spacer(Modifier.height(10.dp))
         Text("All IN ONE Media • Version 0.2.0", color = secondary, fontSize = 11.sp)
         Text("Your library, providers, and settings are stored locally on this device.", color = secondary, fontSize = 10.sp)
+    }
+}
+
+
+@Composable
+private fun ReaderDialog(item: MediaCard, onDismiss: () -> Unit) {
+    var pageIndex by remember(item.id) { mutableIntStateOf(0) }
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            shape = RoundedCornerShape(20.dp),
+            color = Color(0xFF100D19)
+        ) {
+            Column(Modifier.fillMaxWidth().padding(14.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(item.title, color = Color.White, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(if (item.pages.isNotEmpty()) "Chapter pages" else "Reading view", color = SoftText, fontSize = 10.sp)
+                    }
+                    TextButton(onClick = onDismiss) { Text("Close", color = Purple) }
+                }
+                if (item.pages.isNotEmpty()) {
+                    AsyncImage(
+                        model = item.pages[pageIndex.coerceIn(item.pages.indices)],
+                        contentDescription = "Page " + (pageIndex + 1),
+                        modifier = Modifier.fillMaxWidth().height(470.dp).clip(RoundedCornerShape(10.dp))
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().padding(top = 10.dp)) {
+                        OutlinedButton(onClick = { pageIndex = (pageIndex - 1).coerceAtLeast(0) }, enabled = pageIndex > 0) { Text("Previous") }
+                        Text((pageIndex + 1).toString() + " / " + item.pages.size, color = SoftText, fontSize = 12.sp)
+                        Button(onClick = { pageIndex = (pageIndex + 1).coerceAtMost(item.pages.lastIndex) }, enabled = pageIndex < item.pages.lastIndex) { Text("Next") }
+                    }
+                } else {
+                    Column(Modifier.fillMaxWidth().heightIn(min = 250.dp, max = 620.dp).verticalScroll(rememberScrollState()).padding(8.dp)) {
+                        Text(item.textContent, color = Color(0xFFF2ECFA), fontSize = 15.sp, lineHeight = 24.sp)
+                    }
+                }
+            }
+        }
     }
 }
 
