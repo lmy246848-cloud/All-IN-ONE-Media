@@ -93,7 +93,9 @@ object CatalogService {
         }
     }
 
-    private fun request(url: String, method: String = "GET", body: String? = null): String {
+    private data class HttpTextResponse(val body: String, val contentType: String)
+
+    private fun requestDetailed(url: String, method: String = "GET", body: String? = null): HttpTextResponse {
         val connection = URL(url).openConnection() as HttpURLConnection
         try {
             connection.requestMethod = method
@@ -101,7 +103,7 @@ object CatalogService {
             connection.connectTimeout = 15000
             connection.readTimeout = 20000
             connection.setRequestProperty("User-Agent", "AllInOneMedia/0.4 Android")
-            connection.setRequestProperty("Accept", "application/json, application/x-mpegURL, audio/x-mpegurl, */*")
+            connection.setRequestProperty("Accept", "application/json, application/x-mpegURL, audio/x-mpegurl, text/plain, text/html, */*")
             if (body != null) {
                 connection.doOutput = true
                 connection.setRequestProperty("Content-Type", "application/json")
@@ -111,9 +113,12 @@ object CatalogService {
             val stream = if (code in 200..299) connection.inputStream else connection.errorStream
             val text = stream?.bufferedReader()?.use { it.readText() } ?: ""
             if (code !in 200..299) throw IllegalStateException("Service returned HTTP " + code)
-            return text
+            return HttpTextResponse(text, connection.contentType?.substringBefore(";")?.trim()?.lowercase().orEmpty())
         } finally { connection.disconnect() }
     }
+
+    private fun request(url: String, method: String = "GET", body: String? = null): String =
+        requestDetailed(url, method, body).body
 
     private fun aniList(term: String, manga: Boolean): List<MediaCard> {
         val type = if (manga) "MANGA" else "ANIME"
@@ -225,7 +230,7 @@ object CatalogService {
                 subtitle = author.ifBlank { "Project Gutenberg" }, category = "Light Novels",
                 pageUrl = "https://www.gutenberg.org/ebooks/$id",
                 coverUrl = image, description = subject, providerName = "Project Gutenberg",
-                textUrl = textUrl.ifBlank { htmlUrl }
+                textUrl = textUrl
             )
         }
     }
@@ -502,7 +507,7 @@ object CatalogService {
         val genericUrl = field("url", "link", "sourceUrl", "source_url")
         val stream = when {
             rawUrl.isNotBlank() && isHttpsUrl(rawUrl) -> rawUrl
-            genericUrl.isNotBlank() && isPlayable(genericUrl) -> genericUrl
+            genericUrl.isNotBlank() && isHttpsUrl(genericUrl) && (isPlayable(genericUrl) || mimeType.isNotBlank()) -> genericUrl
             else -> ""
         }
         val explicitPage = field("pageUrl", "page_url", "webUrl", "web_url", "link", "detailUrl")
@@ -515,7 +520,7 @@ object CatalogService {
             ?: firstValue(metadata, "pages", "pageUrls", "page_urls", "images")
         val content = field("content", "text", "chapterText", "chapter_text", "body")
         val textUrl = field("textUrl", "text_url", "readerUrl", "reader_url", "textFile", "downloadUrl")
-        val mimeType = mimeTypeFromHint(field("mimeType", "mime_type", "streamMimeType", "stream_mime_type"))
+        val mimeType = mimeTypeFromHint(field("mimeType", "mime_type", "streamMimeType", "stream_mime_type", "format"))
         val title = field("title", "name", "label", "mangaTitle", "animeTitle", "bookTitle")
         val itemId = field("id", "slug", "key").ifBlank { provider.id + "-" + index }
         val nestedValue = firstValue(item, "episodes", "chapters", "children", "parts")
@@ -570,9 +575,26 @@ object CatalogService {
             )
         }
 
-        val text = request(url).removePrefix("\uFEFF").trim()
+        val response = requestDetailed(url)
+        if (response.contentType.contains("text/html") || response.body.trimStart().startsWith("<!doctype html", true) ||
+            response.body.trimStart().startsWith("<html", true)) {
+            val pageTitle = Regex("<title[^>]*>(.*?)</title>", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
+                .find(response.body)?.groupValues?.getOrNull(1)?.replace(Regex("\\s+"), " ")?.trim()
+            return@withContext listOf(
+                MediaCard(
+                    id = "web-" + provider.id,
+                    title = pageTitle?.takeIf { it.isNotBlank() } ?: provider.name,
+                    subtitle = "Website source • " + provider.category,
+                    category = provider.category,
+                    pageUrl = url,
+                    description = "This source is a website rather than a JSON or M3U feed. Open it inside the app to browse its available content.",
+                    providerName = provider.name
+                )
+            )
+        }
+        val text = response.body.removePrefix("\uFEFF").trim()
         if (text.startsWith("#EXTM3U", true)) {
-            return@withContext parseM3u(text, provider)
+            return@withContext parseM3u(text, provider).map { attachDetectedMimeTypes(it) }
         }
 
         val payload = parseJsonValue(text)
