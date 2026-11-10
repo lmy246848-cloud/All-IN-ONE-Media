@@ -623,7 +623,7 @@ private fun ProviderManagerScreen(
                     onClick = {
                         when {
                             name.isBlank() -> error = "Enter a provider name."
-                            !(url.startsWith("https://") || url.startsWith("http://")) -> error = "Enter a valid http:// or https:// URL."
+                            !url.startsWith("https://") -> error = "For security, provider URLs must use HTTPS."
                             else -> {
                                 onAdd(MediaProvider(System.currentTimeMillis().toString(), name.trim(), category, url.trim()))
                                 name = ""; url = ""; error = "Provider added. Tap Sync to load its catalogue."
