@@ -702,10 +702,18 @@ private fun MediaCardRow(
                     }
                     if (item.streamUrl.isNotBlank()) {
                         IconButton(onClick = { onPlay(item) }) { Icon(Icons.Filled.PlayArrow, contentDescription = "Play", tint = Purple) }
-                    } else {
-                        IconButton(onClick = { onOpen(item) }) {
-                            Icon(Icons.Filled.Explore, contentDescription = "Open details, chapters or source page", tint = Purple)
-                        }
+                    }
+                    TextButton(onClick = { onOpen(item) }) {
+                        Icon(Icons.Filled.Explore, contentDescription = null, tint = Purple, modifier = Modifier.size(17.dp))
+                        Spacer(Modifier.width(3.dp))
+                        Text(
+                            when {
+                                item.pages.isNotEmpty() || item.textContent.isNotBlank() || item.textUrl.isNotBlank() -> "Read"
+                                item.childItems.isNotEmpty() -> "Episodes / chapters"
+                                else -> "Open details"
+                            },
+                            color = Purple, fontSize = 11.sp
+                        )
                     }
                     if (CatalogService.isDownloadable(item.streamUrl)) {
                         IconButton(onClick = { onDownload(item) }) { Icon(Icons.Filled.Download, contentDescription = "Download", tint = Aqua) }
@@ -1199,7 +1207,7 @@ private fun InAppBrowserDialog(title: String, url: String, onDismiss: () -> Unit
                     }) { Text("Back", color = Aqua) }
                     TextButton(onClick = onDismiss) { Text("Close", color = Purple) }
                 }
-                AndroidView(factory = { webView }, modifier = Modifier.fillMaxSize())
+                AndroidView(factory = { webView }, modifier = Modifier.fillMaxWidth().weight(1f))
             }
         }
     }
@@ -1208,9 +1216,22 @@ private fun InAppBrowserDialog(title: String, url: String, onDismiss: () -> Unit
 @Composable
 private fun VideoPlayerDialog(item: MediaCard, onDismiss: () -> Unit) {
     val context = LocalContext.current
-    val player = remember(item.streamUrl) {
+    var playbackError by remember(item.streamUrl) { mutableStateOf("") }
+    var buffering by remember(item.streamUrl) { mutableStateOf(true) }
+    val player = remember(item.streamUrl, item.mimeType) {
         ExoPlayer.Builder(context).build().apply {
-            setMediaItem(PlayerMediaItem.fromUri(item.streamUrl))
+            val mediaBuilder = PlayerMediaItem.Builder().setUri(item.streamUrl)
+            if (item.mimeType.isNotBlank()) mediaBuilder.setMimeType(item.mimeType)
+            setMediaItem(mediaBuilder.build())
+            addListener(object : androidx.media3.common.Player.Listener {
+                override fun onPlaybackStateChanged(playbackState: Int) {
+                    buffering = playbackState == androidx.media3.common.Player.STATE_BUFFERING
+                }
+                override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                    playbackError = error.errorCodeName + ": " + (error.message ?: "Playback failed")
+                    buffering = false
+                }
+            })
             prepare()
             playWhenReady = true
         }
@@ -1227,7 +1248,23 @@ private fun VideoPlayerDialog(item: MediaCard, onDismiss: () -> Unit) {
                     factory = { viewContext -> PlayerView(viewContext).apply { this.player = player; useController = true } },
                     modifier = Modifier.fillMaxWidth().height(245.dp)
                 )
-                Text("Playback uses the stream URL supplied by your provider.", color = SoftText, fontSize = 10.sp, modifier = Modifier.padding(top = 8.dp))
+                if (buffering) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
+                        CircularProgressIndicator(color = Purple, modifier = Modifier.size(15.dp), strokeWidth = 2.dp)
+                        Text("Connecting to stream…", color = SoftText, fontSize = 10.sp, modifier = Modifier.padding(start = 8.dp))
+                    }
+                }
+                if (playbackError.isNotBlank()) {
+                    Text(playbackError, color = Pink, fontSize = 11.sp, modifier = Modifier.padding(top = 7.dp))
+                    Text("The link may be offline, require unavailable access headers, use DRM, or point to an unsupported format.", color = SoftText, fontSize = 10.sp)
+                    TextButton(onClick = {
+                        playbackError = ""
+                        buffering = true
+                        player.prepare()
+                        player.playWhenReady = true
+                    }) { Text("Retry playback", color = Aqua) }
+                }
+                Text("Playback uses the stream URL supplied by your provider. Streams with DRM or restricted access are not supported.", color = SoftText, fontSize = 10.sp, modifier = Modifier.padding(top = 8.dp))
             }
         }
     }
