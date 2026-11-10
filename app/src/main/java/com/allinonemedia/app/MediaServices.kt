@@ -640,7 +640,8 @@ object CatalogService {
                     category = provider.category,
                     streamUrl = url,
                     providerName = provider.name,
-                    mimeType = detectedMime.ifBlank { guessMimeType(url) }
+                    mimeType = detectedMime.ifBlank { guessMimeType(url) },
+                    httpHeaders = provider.headers
                 )
             )
         }
@@ -664,7 +665,9 @@ object CatalogService {
         }
         val text = response.body.removePrefix("\uFEFF").trim()
         if (text.startsWith("#EXTM3U", true)) {
-            return@withContext parseM3u(text, provider).map { attachDetectedMimeTypes(it) }
+            return@withContext parseM3u(text, provider).map {
+                attachDetectedMimeTypes(it.copy(httpHeaders = provider.headers))
+            }
         }
 
         val payload = parseJsonValue(text)
@@ -672,7 +675,9 @@ object CatalogService {
         val parsedCards = (0 until array.length()).mapNotNull { index ->
             cardFromProviderEntry(array.opt(index), index, provider)
         }
-        val cards = parsedCards.map { attachDetectedMimeTypes(it) }
+        val cards = parsedCards.map { card ->
+            attachDetectedMimeTypes(withFallbackHeaders(card, provider.headers))
+        }
         if (cards.isEmpty()) {
             throw IllegalStateException(
                 "The source returned valid data, but no title entries could be read. Check that the feed contains title, name, URL, or stream fields."
@@ -680,6 +685,12 @@ object CatalogService {
         }
         cards
     }
+
+    private fun withFallbackHeaders(card: MediaCard, fallback: Map<String, String>): MediaCard =
+        card.copy(
+            httpHeaders = card.httpHeaders.ifEmpty { fallback },
+            childItems = card.childItems.map { withFallbackHeaders(it, fallback) }
+        )
 
     private fun attachDetectedMimeTypes(card: MediaCard): MediaCard {
         val children = card.childItems.map { attachDetectedMimeTypes(it) }
