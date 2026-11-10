@@ -27,7 +27,7 @@ data class MediaCard(
     val textUrl: String = "", val childItems: List<MediaCard> = emptyList(),
     val mimeType: String = "", val httpHeaders: Map<String, String> = emptyMap()
 ) {
-    fun toJson() = JSONObject().put("id", id).put("title", title).put("subtitle", subtitle)
+    fun toJson(): JSONObject = JSONObject().put("id", id).put("title", title).put("subtitle", subtitle)
         .put("category", category).put("pageUrl", pageUrl).put("streamUrl", streamUrl)
         .put("coverUrl", coverUrl).put("description", description).put("providerName", providerName)
         .put("pages", JSONArray(pages)).put("content", textContent).put("textUrl", textUrl)
@@ -43,7 +43,7 @@ data class MediaCard(
             o.optJSONArray("pages")?.let { a -> (0 until a.length()).map { i -> a.optString(i) } } ?: emptyList(),
             o.optString("content"), o.optString("textUrl"),
             o.optJSONArray("children")?.let { a ->
-                (0 until a.length()).mapNotNull { i -> a.optJSONObject(i)?.let(::fromJson) }
+                (0 until a.length()).mapNotNull { i -> a.optJSONObject(i)?.let { child -> MediaCard.fromJson(child) } }
             } ?: emptyList(),
             o.optString("mimeType"),
             o.optJSONObject("headers")?.let { headerObject ->
