@@ -234,7 +234,7 @@ fun AllInOneApp() {
         }
     }
     activeVideo?.let { item -> VideoPlayerDialog(item = item, onDismiss = { activeVideo = null }) }
-    activeReader?.let { item -> ReaderDialog(item = item, onDismiss = { activeReader = null }) }
+    activeReader?.let { item -> ReaderDialog(item = item, onDismiss = { activeReader = null }, onOpenSource = { openExternal(it) }) }
 }
 
 @Composable
@@ -816,7 +816,7 @@ private fun SettingsScreen(
 
 
 @Composable
-private fun ReaderDialog(item: MediaCard, onDismiss: () -> Unit) {
+private fun ReaderDialog(item: MediaCard, onDismiss: () -> Unit, onOpenSource: (String) -> Unit) {
     var pageIndex by remember(item.id) { mutableIntStateOf(0) }
     var fontSize by remember(item.id) { mutableFloatStateOf(17f) }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
@@ -851,7 +851,7 @@ private fun ReaderDialog(item: MediaCard, onDismiss: () -> Unit) {
                         valueRange = 0f..(item.pages.lastIndex.coerceAtLeast(1)).toFloat(),
                         modifier = Modifier.fillMaxWidth()
                     )
-                } else {
+                } else if (item.textContent.isNotBlank()) {
                     Column(Modifier.fillMaxWidth().weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text("Text size", color = SoftText, fontSize = 11.sp)
@@ -865,6 +865,24 @@ private fun ReaderDialog(item: MediaCard, onDismiss: () -> Unit) {
                                 Spacer(Modifier.height(16.dp))
                             }
                             Text(item.textContent, color = Color(0xFFF2ECFA), fontSize = fontSize.sp, lineHeight = (fontSize * 1.55f).sp)
+                        }
+                    }
+                } else {
+                    Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(item.category + " • " + item.subtitle, color = Purple, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        if (item.coverUrl.isNotBlank()) {
+                            AsyncImage(model = item.coverUrl, contentDescription = item.title, contentScale = ContentScale.Fit,
+                                modifier = Modifier.fillMaxWidth().heightIn(max = 280.dp).clip(RoundedCornerShape(12.dp)))
+                        }
+                        Text(item.description.ifBlank { "This source has provided catalogue information but has not supplied readable chapters or full text for this title." },
+                            color = Color(0xFFF2ECFA), fontSize = 14.sp, lineHeight = 22.sp)
+                        Text("Reading or playback availability depends on the installed source. If the source provides chapter pages, novel text, or a playable stream, those open directly in All IN ONE Media.", color = SoftText, fontSize = 11.sp)
+                        if (item.pageUrl.isNotBlank()) {
+                            Button(onClick = { onOpenSource(item.pageUrl) }, modifier = Modifier.fillMaxWidth()) {
+                                Icon(Icons.Filled.Explore, contentDescription = null)
+                                Spacer(Modifier.width(7.dp))
+                                Text("Open source page")
+                            }
                         }
                     }
                 }
