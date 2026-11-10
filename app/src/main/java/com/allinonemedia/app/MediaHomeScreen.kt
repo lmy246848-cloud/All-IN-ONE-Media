@@ -622,6 +622,11 @@ private fun ProviderManagerScreen(
     var url by remember { mutableStateOf("") }
     var category by remember { mutableStateOf("All") }
     var error by remember { mutableStateOf("") }
+    var repositoryUrl by remember { mutableStateOf("") }
+    var repositoryItems by remember { mutableStateOf(emptyList<ExtensionListing>()) }
+    var repositoryLoading by remember { mutableStateOf(false) }
+    var repositoryMessage by remember { mutableStateOf("") }
+    val extensionScope = rememberCoroutineScope()
     val providerTypes = listOf("All", "Anime", "Donghua", "Movies", "Series", "Manga", "Manhwa", "Light Novels", "Shorts")
 
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
@@ -630,7 +635,67 @@ private fun ProviderManagerScreen(
         Spacer(Modifier.height(11.dp))
         Card(colors = CardDefaults.cardColors(containerColor = surface), shape = RoundedCornerShape(18.dp)) {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                Text("Add a provider", color = foreground, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Text("Extension repository", color = foreground, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Text("Add a compatible All IN ONE Media repository URL to browse installable source adapters. Installing adds the source to this app; it does not execute downloaded code.", color = secondary, fontSize = 11.sp)
+                OutlinedTextField(
+                    value = repositoryUrl, onValueChange = { repositoryUrl = it },
+                    label = { Text("Repository URL") },
+                    placeholder = { Text("https://example.org/extensions.json") },
+                    modifier = Modifier.fillMaxWidth(), singleLine = true
+                )
+                Button(
+                    onClick = {
+                        if (!repositoryUrl.startsWith("https://")) {
+                            repositoryMessage = "Repository URLs must use HTTPS."
+                        } else {
+                            extensionScope.launch {
+                                repositoryLoading = true
+                                repositoryMessage = "Loading extension catalogue…"
+                                try {
+                                    repositoryItems = CatalogService.fetchExtensionRepository(repositoryUrl)
+                                    repositoryMessage = "Found " + repositoryItems.size + " installable sources."
+                                } catch (e: Exception) {
+                                    repositoryMessage = e.message ?: "Could not load this repository."
+                                    repositoryItems = emptyList()
+                                } finally { repositoryLoading = false }
+                            }
+                        }
+                    }, enabled = repositoryUrl.isNotBlank() && !repositoryLoading,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    if (repositoryLoading) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                    else Icon(Icons.Filled.Explore, contentDescription = null)
+                    Spacer(Modifier.width(6.dp))
+                    Text(if (repositoryLoading) "Loading…" else "Browse extensions")
+                }
+                if (repositoryMessage.isNotBlank()) Text(repositoryMessage, color = secondary, fontSize = 11.sp)
+                repositoryItems.forEach { extension ->
+                    val installed = providers.any { it.url == extension.url }
+                    Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(extension.name, color = foreground, fontWeight = FontWeight.SemiBold)
+                            Text(extension.category + " • v" + extension.version, color = secondary, fontSize = 10.sp)
+                            if (extension.description.isNotBlank()) Text(extension.description, color = secondary, fontSize = 10.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        }
+                        Button(
+                            onClick = {
+                                if (!installed) {
+                                    onAdd(MediaProvider("repo-" + extension.id, extension.name, extension.category, extension.url))
+                                    repositoryMessage = extension.name + " installed. Tap Sync in Your providers."
+                                }
+                            },
+                            enabled = !installed,
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                        ) { Text(if (installed) "Installed" else "Install") }
+                    }
+                    HorizontalDivider(color = secondary.copy(alpha = 0.15f))
+                }
+            }
+        }
+        Spacer(Modifier.height(10.dp))
+        Card(colors = CardDefaults.cardColors(containerColor = surface), shape = RoundedCornerShape(18.dp)) {
+            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                Text("Add a provider manually", color = foreground, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                 OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Provider name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 Text("Content type", color = secondary, fontSize = 11.sp)
                 androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
