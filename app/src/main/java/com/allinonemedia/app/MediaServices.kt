@@ -16,14 +16,14 @@ data class MediaCard(
     val description: String = "", val providerName: String = "",
     val pages: List<String> = emptyList(), val textContent: String = "",
     val textUrl: String = "", val childItems: List<MediaCard> = emptyList(),
-    val mimeType: String = ""
+    val mimeType: String = "", val httpHeaders: Map<String, String> = emptyMap()
 ) {
     fun toJson() = JSONObject().put("id", id).put("title", title).put("subtitle", subtitle)
         .put("category", category).put("pageUrl", pageUrl).put("streamUrl", streamUrl)
         .put("coverUrl", coverUrl).put("description", description).put("providerName", providerName)
         .put("pages", JSONArray(pages)).put("content", textContent).put("textUrl", textUrl)
         .put("children", JSONArray().apply { childItems.forEach { put(it.toJson()) } })
-        .put("mimeType", mimeType)
+        .put("mimeType", mimeType).put("headers", JSONObject(httpHeaders))
 
     companion object {
         fun fromJson(o: JSONObject) = MediaCard(
@@ -36,7 +36,13 @@ data class MediaCard(
             o.optJSONArray("children")?.let { a ->
                 (0 until a.length()).mapNotNull { i -> a.optJSONObject(i)?.let(::fromJson) }
             } ?: emptyList(),
-            o.optString("mimeType")
+            o.optString("mimeType"),
+            o.optJSONObject("headers")?.let { headerObject ->
+                headerObject.keys().asSequence().mapNotNull { key ->
+                    val value = headerObject.optString(key)
+                    if (validHeader(key, value)) key to value else null
+                }.toMap()
+            } ?: emptyMap()
         )
     }
 }
@@ -538,6 +544,13 @@ object CatalogService {
         val mimeType = mimeTypeFromHint(field("mimeType", "mime_type", "streamMimeType", "stream_mime_type", "format"))
         val title = field("title", "name", "label", "mangaTitle", "animeTitle", "bookTitle")
         val itemId = field("id", "slug", "key").ifBlank { provider.id + "-" + index }
+        val headersValue = firstValue(item, "headers", "requestHeaders", "request_headers")
+            ?: firstValue(metadata, "headers", "requestHeaders", "request_headers")
+        val headerObject = headersValue as? JSONObject
+        val headers = headerObject?.keys()?.asSequence()?.mapNotNull { key ->
+            val value = headerObject.optString(key)
+            if (validHeader(key, value)) key to value else null
+        }?.toMap() ?: emptyMap()
         val nestedValue = firstValue(item, "episodes", "chapters", "children", "parts")
         val nestedArray = when (nestedValue) {
             is JSONArray -> nestedValue
@@ -562,8 +575,11 @@ object CatalogService {
             pages = stringList(pagesValue).filter { it.startsWith("https://", true) },
             textContent = content,
             textUrl = textUrl,
-            childItems = children,
-            mimeType = mimeType.ifBlank { guessMimeType(stream) }
+            childItems = children.map { child ->
+                if (child.httpHeaders.isEmpty()) child.copy(httpHeaders = headers) else child
+            },
+            mimeType = mimeType.ifBlank { guessMimeType(stream) },
+            httpHeaders = headers
         )
     }
 
@@ -647,6 +663,15 @@ object CatalogService {
             }
         }
         return result
+    }
+
+    private fun validHeader(name: String, value: String): Boolean {
+        val key = name.trim()
+        val blocked = setOf("host", "connection", "content-length", "transfer-encoding", "proxy-authorization", "proxy-connection", "upgrade")
+        return key.matches(Regex("[A-Za-z0-9-]{1,64}")) &&
+            key.lowercase() !in blocked &&
+            value.length <= 4096 &&
+            !value.contains("\\r") && !value.contains("\\n")
     }
 
     private fun isHttpsUrl(value: String): Boolean =
