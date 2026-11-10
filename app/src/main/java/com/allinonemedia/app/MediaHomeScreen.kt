@@ -790,6 +790,7 @@ private fun ProviderManagerScreen(
     var name by remember { mutableStateOf("") }
     var url by remember { mutableStateOf("") }
     var category by remember { mutableStateOf("All") }
+    var headersText by remember { mutableStateOf("") }
     var error by remember { mutableStateOf("") }
     var appliedMessage by remember { mutableStateOf("") }
     val providerTypes = listOf("All", "Anime", "Donghua", "Movies", "Series", "Manga", "Manhwa", "Light Novels", "Shorts")
@@ -835,6 +836,17 @@ private fun ProviderManagerScreen(
                     "Use an HTTPS JSON catalogue, M3U playlist, direct video URL, or website page. Mihon / Aniyomi / CloudStream plugin repository links are not compatible feed URLs. The name is optional.",
                     color = secondary, fontSize = 10.sp
                 )
+                OutlinedTextField(
+                    value = headersText,
+                    onValueChange = { headersText = it; error = ""; appliedMessage = "" },
+                    label = { Text("Advanced HTTP headers (optional JSON)") },
+                    placeholder = { Text("{\n  \"Referer\": \"https://example.org/\"\n}") },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 2,
+                    maxLines = 4,
+                    shape = RoundedCornerShape(15.dp)
+                )
+                Text("Only use headers provided by a source you trust. Header values are saved locally with this provider.", color = secondary, fontSize = 10.sp)
                 if (error.isNotBlank()) Text(error, color = Pink, fontSize = 11.sp)
                 if (appliedMessage.isNotBlank()) Text(appliedMessage, color = Aqua, fontSize = 11.sp)
                 Button(
@@ -845,16 +857,23 @@ private fun ProviderManagerScreen(
                             !cleanUrl.startsWith("https://", true) -> error = "For security, use an HTTPS link."
                             providers.any { it.url.equals(cleanUrl, true) } -> error = "This source is already added."
                             else -> {
-                                val automaticName = name.trim().ifBlank {
-                                    runCatching { android.net.Uri.parse(cleanUrl).host?.removePrefix("www.") }.getOrNull()
-                                        ?.takeIf { it.isNotBlank() } ?: "Provider " + (providers.size + 1)
+                                val parsedHeaders = runCatching { CatalogService.parseHeadersJson(headersText) }
+                                if (parsedHeaders.isFailure) {
+                                    error = parsedHeaders.exceptionOrNull()?.message ?: "Request headers must be valid JSON."
+                                } else {
+                                    val automaticName = name.trim().ifBlank {
+                                        runCatching { android.net.Uri.parse(cleanUrl).host?.removePrefix("www.") }.getOrNull()
+                                            ?.takeIf { it.isNotBlank() } ?: "Provider " + (providers.size + 1)
+                                    }
+                                    onAdd(MediaProvider(
+                                        System.currentTimeMillis().toString(), automaticName, category, cleanUrl,
+                                        headers = parsedHeaders.getOrDefault(emptyMap())
+                                    ))
+                                    appliedMessage = "$automaticName added. Tap Sync below to load its titles."
+                                    name = ""
+                                    url = ""
+                                    headersText = ""
                                 }
-                                onAdd(MediaProvider(
-                                    System.currentTimeMillis().toString(), automaticName, category, cleanUrl
-                                ))
-                                appliedMessage = "$automaticName added. Tap Sync below to load its titles."
-                                name = ""
-                                url = ""
                             }
                         }
                     },
@@ -888,7 +907,10 @@ private fun ProviderManagerScreen(
                 ) {
                     Column(Modifier.fillMaxWidth().padding(13.dp)) {
                         Text(provider.name, color = foreground, fontWeight = FontWeight.Bold)
-                        Text(provider.category + " • " + provider.url, color = secondary, fontSize = 10.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Text(
+                            provider.category + (if (provider.headers.isNotEmpty()) " • custom headers" else "") + " • " + provider.url,
+                            color = secondary, fontSize = 10.sp, maxLines = 2, overflow = TextOverflow.Ellipsis
+                        )
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Button(
                                 onClick = { onSync(provider) }, enabled = syncingId != provider.id,
