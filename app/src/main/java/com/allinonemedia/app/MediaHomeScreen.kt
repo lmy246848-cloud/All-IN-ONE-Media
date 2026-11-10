@@ -179,7 +179,7 @@ fun AllInOneApp() {
                             onDiscover = { page = "Discover" }, onLibrary = { page = "Library" }
                         )
                         "Discover" -> DiscoverScreen(
-                            initialCategory = discoverCategory, tmdbKey = tmdbKey,
+                            initialCategory = discoverCategory, providerItems = sourceItems, tmdbKey = tmdbKey,
                             libraryIds = library.map { it.id }.toSet(),
                             onSave = { toggleLibrary(it) }, onOpen = { openExternal(it.pageUrl) },
                             onPlay = { activeVideo = it }, onDownload = { downloadMedia(context, it) }
@@ -360,7 +360,7 @@ private fun CategoryTile(
 
 @Composable
 private fun DiscoverScreen(
-    initialCategory: String, tmdbKey: String, libraryIds: Set<String>,
+    initialCategory: String, providerItems: List<MediaCard>, tmdbKey: String, libraryIds: Set<String>,
     onSave: (MediaCard) -> Unit, onOpen: (MediaCard) -> Unit,
     onPlay: (MediaCard) -> Unit, onDownload: (MediaCard) -> Unit
 ) {
@@ -409,11 +409,66 @@ private fun DiscoverScreen(
         if (loading) {
             Column { repeat(3) { LoadingCard() } }
         } else if (category == "Shorts") {
-            Text("Add a Shorts JSON feed, M3U playlist, or direct MP4/HLS link in Extensions.", color = SoftText, fontSize = 12.sp)
+            val shorts = providerItems.filter { it.category.equals("Shorts", true) || it.category.equals("All", true) }
+            if (shorts.isEmpty()) {
+                Text("Your short-drama feed is ready for a source. Add a Shorts JSON feed, M3U playlist, or direct MP4/HLS link in Extensions, then tap Sync.", color = SoftText, fontSize = 12.sp)
+            } else {
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 20.dp)) {
+                    items(shorts, key = { it.id }) { item ->
+                        ShortVideoCard(item, libraryIds.contains(item.id), onSave, onOpen, onPlay, onDownload)
+                    }
+                }
+            }
         } else {
+            val custom = providerItems.filter {
+                it.category.equals(category, true) || it.category.equals("All", true) ||
+                    (category == "Donghua" && it.category.equals("Anime", true)) ||
+                    (category == "Manhwa" && it.category.equals("Manga", true))
+            }
+            val displayed = (results + custom).distinctBy { it.id }
             LazyColumn(verticalArrangement = Arrangement.spacedBy(9.dp), contentPadding = PaddingValues(bottom = 20.dp)) {
-                items(results, key = { it.id }) { item ->
+                items(displayed, key = { it.id }) { item ->
                     MediaCardRow(item, libraryIds.contains(item.id), onSave, onOpen, onPlay, onDownload)
+                }
+            }
+        }
+    }
+}
+
+
+@Composable
+private fun ShortVideoCard(
+    item: MediaCard, saved: Boolean, onSave: (MediaCard) -> Unit,
+    onOpen: (MediaCard) -> Unit, onPlay: (MediaCard) -> Unit, onDownload: (MediaCard) -> Unit
+) {
+    Card(colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(18.dp)) {
+        Column(Modifier.fillMaxWidth().padding(10.dp)) {
+            if (item.coverUrl.isNotBlank()) {
+                AsyncImage(model = item.coverUrl, contentDescription = item.title,
+                    modifier = Modifier.fillMaxWidth().height(205.dp).clip(RoundedCornerShape(13.dp)))
+            } else {
+                Box(Modifier.fillMaxWidth().height(205.dp).clip(RoundedCornerShape(13.dp))
+                    .background(Brush.linearGradient(listOf(Color(0xFF4A2076), Color(0xFF191326)))),
+                    contentAlignment = Alignment.Center) {
+                    Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(52.dp))
+                }
+            }
+            Spacer(Modifier.height(9.dp))
+            Text(item.title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Text(item.subtitle.ifBlank { item.providerName.ifBlank { "Short drama" } }, color = SoftText, fontSize = 11.sp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Button(onClick = { if (item.streamUrl.isNotBlank()) onPlay(item) else onOpen(item) }, enabled = item.streamUrl.isNotBlank() || item.pageUrl.isNotBlank()) {
+                    Icon(Icons.Filled.PlayArrow, contentDescription = null)
+                    Spacer(Modifier.width(5.dp))
+                    Text(if (item.streamUrl.isNotBlank()) "Watch" else "Open source")
+                }
+                IconButton(onClick = { onSave(item) }) {
+                    Icon(Icons.Filled.Bookmark, contentDescription = "Save", tint = if (saved) Aqua else SoftText)
+                }
+                if (CatalogService.isDownloadable(item.streamUrl)) {
+                    IconButton(onClick = { onDownload(item) }) {
+                        Icon(Icons.Filled.Download, contentDescription = "Download", tint = Aqua)
+                    }
                 }
             }
         }
@@ -553,7 +608,7 @@ private fun ProviderManagerScreen(
                     placeholder = { Text("https://example.com/provider.json") },
                     modifier = Modifier.fillMaxWidth(), singleLine = true
                 )
-                Text("Supported feeds: a JSON object with an items array, an M3U playlist, or a direct media URL. Downloaded code is never executed.", color = secondary, fontSize = 10.sp)
+                Text("Supported feeds: a JSON object with an items array, an M3U playlist, or a direct media URL. Secure HTTPS links only; provider code is never executed.", color = secondary, fontSize = 10.sp)
                 if (error.isNotBlank()) Text(error, color = Pink, fontSize = 11.sp)
                 Button(
                     onClick = {
