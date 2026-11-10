@@ -630,7 +630,7 @@ object CatalogService {
                 title = provider.name
             }
         }
-        return result.map { attachDetectedMimeTypes(it) }
+        return result
     }
 
     private fun isHttpsUrl(value: String): Boolean =
