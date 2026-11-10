@@ -1,0 +1,97 @@
+name: Build All IN ONE Media — full extension runtimes (Android ARM64)
+
+on:
+  push:
+    branches:
+      - media-runtime-rebuild
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: all-in-one-media-runtime-apk
+  cancel-in-progress: true
+
+jobs:
+  android-arm64:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install SVG tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y librsvg2-bin fonts-dejavu-core
+
+      - name: Validate and prepare branded source
+        run: |
+          python3 -m py_compile scripts/prepare_all_in_one_media.py
+          python3 scripts/prepare_all_in_one_media.py
+          rsvg-convert --width 512 --height 512 assets/icon/all_in_one_media.svg > assets/icon/app_icon.png
+          rsvg-convert --width 620 --height 90 assets/icon/all_in_one_wordmark.svg > assets/icon/wordmark.png
+
+      - name: Resolve Flutter dependencies
+        run: flutter pub get
+
+      - name: Format touched Dart files
+        run: dart format lib/features/sources/providers_hub_screen.dart lib/features/short_drama/short_drama_screen.dart
+
+      - name: Run Flutter tests
+        run: flutter test --reporter compact
+
+      - name: Build Android ARM64 APK
+        env:
+          GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.parallel=false -Dorg.gradle.workers.max=2
+        run: flutter build apk --release --target-platform android-arm64
+
+      - name: Rename APK
+        run: cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/All-IN-ONE-Media-1.0.0-arm64.apk
+
+      - name: Verify APK archive
+        run: |
+          test -s build/app/outputs/flutter-apk/All-IN-ONE-Media-1.0.0-arm64.apk
+          unzip -t build/app/outputs/flutter-apk/All-IN-ONE-Media-1.0.0-arm64.apk | tail -n 2
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: All-IN-ONE-Media-1.0.0-arm64
+          path: build/app/outputs/flutter-apk/All-IN-ONE-Media-1.0.0-arm64.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish GitHub prerelease
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: all-in-one-media-v1.0.0-build-${{ github.run_number }}
+          name: All IN ONE Media 1.0.0 (build ${{ github.run_number }})
+          body: |
+            Full Flutter Android build of All IN ONE Media.
+            Package: com.allinonemedia.entertainment
+            Includes the supported Zangetsu JS, CloudStream, Aniyomi, Mihon,
+            Mangayomi bridge and LNReader source runtimes, plus in-app video
+            playback and manga/novel reading.
+            This is a source-dependent media app; content availability depends
+            on compatible third-party sources. Upstream account/sync services
+            are disabled in this fork.
+          files: build/app/outputs/flutter-apk/All-IN-ONE-Media-1.0.0-arm64.apk
+          prerelease: true
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
