@@ -196,7 +196,9 @@ fun AllInOneApp() {
                     category = manga.category,
                     pages = pages,
                     providerName = "MangaDex",
-                    description = "Provided by MangaDex. Please credit the manga creators and scanlation group."
+                    description = "Provided by MangaDex. Scanlation group: " +
+                        chapter.scanlationGroups.ifBlank { "not listed in the chapter metadata" } +
+                        ". Please credit the creators and scanlation group."
                 )
             } catch (e: Exception) {
                 activeReader = MediaCard(
@@ -1166,7 +1168,9 @@ private fun MangaDetailsDialog(
                                     Spacer(Modifier.width(10.dp))
                                     Column(Modifier.weight(1f)) {
                                         Text(chapter.title, color = Color.White, fontWeight = FontWeight.SemiBold)
-                                        if (chapter.subtitle.isNotBlank()) Text(chapter.subtitle, color = SoftText, fontSize = 10.sp)
+                                        val chapterMeta = listOf(chapter.subtitle, chapter.scanlationGroups)
+                                            .filter { it.isNotBlank() }.joinToString(" • ")
+                                        if (chapterMeta.isNotBlank()) Text(chapterMeta, color = SoftText, fontSize = 10.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                                     }
                                     Icon(Icons.Filled.Explore, contentDescription = "Read chapter", tint = Purple)
                                 }
