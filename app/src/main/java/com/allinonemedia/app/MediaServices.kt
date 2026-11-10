@@ -660,7 +660,7 @@ object CatalogService {
     private fun parseHtmlCatalog(html: String, provider: MediaProvider, sourceUrl: String): List<MediaCard> {
         val document = Jsoup.parse(html, sourceUrl)
         val documentTitle = document.title().ifBlank { provider.name }
-        val metaDescription = document.selectFirst("meta[name=description], meta[property=og:description]")
+        val metaDescription = document.selectFirst("meta[name=description], meta[property='og:description']")
             ?.attr("content")?.trim().orEmpty()
         val result = mutableListOf<MediaCard>()
         val seen = mutableSetOf<String>()
@@ -727,9 +727,9 @@ object CatalogService {
             val title = entry.selectFirst("title")?.text()?.trim().orEmpty().ifBlank { "Untitled " + (index + 1) }
             val linkElement = entry.getAllElements().firstOrNull { it.tagName().equals("link", true) }
             val linkRaw = linkElement?.attr("href").orEmpty().ifBlank { linkElement?.text().orEmpty() }
-            val mediaElement = entry.getAllElements().firstOrNull {
-                it.tagName().equals("enclosure", true) || it.tagName().equals("content", true) || it.tagName().endsWith(":content", true)
-            }
+            val allEntryElements = entry.getAllElements()
+            val mediaElement = allEntryElements.firstOrNull { it.tagName().equals("enclosure", true) }
+                ?: allEntryElements.firstOrNull { it.tagName().equals("content", true) || it.tagName().endsWith(":content", true) }
             val mediaRaw = mediaElement?.attr("url").orEmpty().ifBlank { mediaElement?.attr("href").orEmpty() }
             val contentType = mediaElement?.attr("type").orEmpty()
             val linkedUrl = resolveHttpsUrl(sourceUrl, linkRaw)
@@ -944,7 +944,7 @@ object CatalogService {
                 val code = connection.responseCode
                 val type = connection.contentType?.substringBefore(";")?.trim()?.lowercase().orEmpty()
                 if (code in 200..299 && (
-                    type.startsWith("video/") ||
+                    type.startsWith("video/") || type.startsWith("audio/") ||
                     type.contains("mpegurl") ||
                     type.contains("dash+xml")
                 )) type else ""
