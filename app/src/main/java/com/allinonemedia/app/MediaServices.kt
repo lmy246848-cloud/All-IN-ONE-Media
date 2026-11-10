@@ -35,7 +35,7 @@ data class MediaCard(
         .put("mimeType", mimeType).put("headers", JSONObject(httpHeaders))
 
     companion object {
-        fun fromJson(o: JSONObject) = MediaCard(
+        fun fromJson(o: JSONObject): MediaCard = MediaCard(
             o.optString("id", o.optString("title")), o.optString("title", "Untitled"),
             o.optString("subtitle"), o.optString("category", "Anime"), o.optString("pageUrl"),
             o.optString("streamUrl"), o.optString("coverUrl"), o.optString("description"),
