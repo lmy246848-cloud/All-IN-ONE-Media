@@ -47,7 +47,7 @@ class LocaleController {
   static String get tag {
     if (!Hive.isBoxOpen(boxName)) return systemTag;
     final v = _box.get(_key) as String?;
-    if (v == null || v.isEmpty) return systemTag;
+    if (v == null || v.isEmpty) return 'en';
     return v;
   }
 
