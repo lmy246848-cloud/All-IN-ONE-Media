@@ -67,37 +67,7 @@ class AppStore(context: Context) {
     }
 }
 
-data class ExtensionListing(
-    val id: String, val name: String, val version: String, val category: String,
-    val url: String, val description: String
-)
-
 object CatalogService {
-    suspend fun fetchExtensionRepository(repositoryUrl: String): List<ExtensionListing> = withContext(Dispatchers.IO) {
-        val url = repositoryUrl.trim()
-        require(url.startsWith("https://")) { "Extension repositories must use HTTPS." }
-        val rootText = request(url)
-        val array = if (rootText.trimStart().startsWith("[")) JSONArray(rootText) else {
-            val root = JSONObject(rootText)
-            root.optJSONArray("extensions") ?: root.optJSONArray("sources") ?: root.optJSONArray("items") ?: JSONArray()
-        }
-        (0 until array.length()).mapNotNull { index ->
-            val item = array.optJSONObject(index) ?: return@mapNotNull null
-            val sourceUrl = item.optString("catalogUrl", item.optString("sourceUrl", item.optString("url", item.optString("manifestUrl")))).trim()
-            if (!sourceUrl.startsWith("https://")) return@mapNotNull null
-            val name = item.optString("name", item.optString("title")).trim()
-            if (name.isBlank()) return@mapNotNull null
-            ExtensionListing(
-                id = item.optString("id").ifBlank { sourceUrl.hashCode().toString() },
-                name = name,
-                version = item.optString("version", "1.0"),
-                category = item.optString("category", "All"),
-                url = sourceUrl,
-                description = item.optString("description")
-            )
-        }
-    }
-
     suspend fun search(category: String, term: String, tmdbKey: String): List<MediaCard> = withContext(Dispatchers.IO) {
         when (category) {
             "Anime", "Donghua", "Manga", "Manhwa" -> aniList(term, category == "Manga" || category == "Manhwa")
