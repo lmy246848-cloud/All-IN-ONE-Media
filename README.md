@@ -9,7 +9,7 @@ All IN ONE Media is an Android media hub for searching titles, adding compatible
 - Public-domain book discovery through Project Gutenberg / Gutendex, with an in-app text reader.
 - Public-domain movie search through Internet Archive licence metadata, with MP4 resolution and in-app playback when an MP4 derivative exists.
 - TV-series metadata search through TMDB after you supply a TMDB API key. TMDB is metadata only; it does not supply video.
-- Manual HTTPS providers that return JSON catalogues, nested episodes/chapters, M3U playlists, or direct video streams, including per-stream MIME types and optional HTTP request headers.
+- Manual HTTPS providers that return JSON catalogues, nested episodes/chapters, M3U playlists, or direct video streams, including per-stream MIME types and optional HTTP request headers for the provider and its stream items.
 - Nested episode and chapter selection in title details.
 - In-app HTTPS browser for source pages that don't expose direct media URLs.
 - Media3 playback for MP4, WebM, M4V, HLS/M3U8 and DASH/MPD, with MIME-type support for signed stream URLs.
@@ -21,7 +21,7 @@ All IN ONE Media is an Android media hub for searching titles, adding compatible
 2. Search for a manga or manhwa, then open its title and choose an available English chapter.
 3. Search **Light Novels** for public-domain books; open a result to load its text.
 4. Search **Movies** for Internet Archive items; open a result to resolve and play an MP4 when one is available.
-5. For anime, donghua, series, and other sources, open **Extensions**. Paste a compatible HTTPS JSON catalogue, M3U playlist, direct media URL, or website URL. Give it an optional name, select a type, and press **Apply / Add extension**. Then press **Sync** and open a loaded result.
+5. For anime, donghua, series, and other sources, open **Extensions**. Paste a compatible HTTPS JSON catalogue, M3U playlist, direct media URL, or website URL. Give it an optional name, select a type, and press **Apply / Add extension**. When a source requires headers, enter them in the advanced JSON field. Then press **Sync** and open a loaded result.
 
 A title listing is not itself a video or chapter. For an anime or series to play, its provider must supply a usable episode stream URL (or a web page that can play it). A JSON feed can provide nested `episodes` or `chapters`; see [the provider format](docs/PROVIDER_FORMAT.md).
 
