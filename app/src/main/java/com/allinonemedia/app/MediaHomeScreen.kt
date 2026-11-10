@@ -106,8 +106,7 @@ fun AllInOneApp() {
     }
 
     fun openItem(item: MediaCard) {
-        if (item.pages.isNotEmpty() || item.textContent.isNotBlank()) activeReader = item
-        else openExternal(item.pageUrl)
+        if (item.pages.isNotEmpty() || item.textContent.isNotBlank() || item.pageUrl.isNotBlank()) activeReader = item
     }
 
     fun syncProvider(provider: MediaProvider) {
