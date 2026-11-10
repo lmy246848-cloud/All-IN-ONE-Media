@@ -151,7 +151,7 @@ fun AllInOneApp() {
             item.textUrl.isNotBlank() -> scope.launch {
                 activeReader = item.copy(textContent = "Loading book text…")
                 try {
-                    val text = CatalogService.fetchPlainText(item.textUrl)
+                    val text = CatalogService.fetchPlainText(item.textUrl, item.httpHeaders)
                     activeReader = item.copy(textContent = text, description = item.description)
                 } catch (e: Exception) {
                     activeReader = item.copy(description = (item.description + "\n\nCould not load the book text: " + (e.message ?: "network error")).trim())
