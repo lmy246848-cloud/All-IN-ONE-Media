@@ -112,9 +112,9 @@ A novel chapter can provide inline text or a plain-text URL:
 
 ## Built-in sources
 
-- Manga and manhwa search uses MangaDex, can list available English chapters, and opens image pages in a vertical reader. MangaDex requires attribution to MangaDex and scanlation groups, requires honouring group removal requests, and prohibits ads or paid services in apps using its API.
+- Manga and manhwa search uses MangaDex, can list available English chapters, displays scanlation-group attribution, and opens image pages in a vertical reader. MangaDex requires attribution to MangaDex and scanlation groups, requires honouring group removal requests, and prohibits ads or paid services in apps using its API.
 - Light-novel search currently uses Project Gutenberg through Gutendex. Its catalogue contains public-domain books in general; it is not a specialist modern light-novel catalogue.
-- Movies search currently uses Internet Archive catalogue records and attempts to resolve a direct MP4 file for in-app playback. Not every record has an MP4 file.
+- Movies search currently filters Internet Archive records to items marked with a public-domain licence and attempts to resolve a direct MP4 file for in-app playback. Not every record has an MP4 file.
 - Anime and donghua search uses AniList for metadata. AniList entries do not include episode video files; add a compatible provider that supplies episode streams or website links to watch.
 - TV series search uses TMDB metadata and requires your own TMDB API key. TMDB does not provide episode streams.
 
