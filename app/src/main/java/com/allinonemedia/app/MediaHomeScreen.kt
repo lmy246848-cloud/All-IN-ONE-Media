@@ -145,7 +145,7 @@ fun AllInOneApp() {
     fun openItem(item: MediaCard) {
         when {
             item.id.startsWith("mangadex-") -> activeManga = item
-            item.id.startsWith("gutenberg-") && item.textUrl.isNotBlank() -> scope.launch {
+            item.textUrl.isNotBlank() -> scope.launch {
                 activeReader = item.copy(textContent = "Loading book text…")
                 try {
                     val text = CatalogService.fetchPlainText(item.textUrl)
@@ -164,7 +164,14 @@ fun AllInOneApp() {
                     activeReader = item.copy(description = (item.description + "\n\nCould not prepare playback: " + (e.message ?: "no MP4 stream")).trim())
                 }
             }
-            else -> activeReader = item
+            else -> {
+                if (item.pageUrl.isNotBlank() && item.childItems.isEmpty() && item.pages.isEmpty() &&
+                    item.textContent.isBlank() && item.textUrl.isBlank() && item.streamUrl.isBlank()) {
+                    openInApp(item.pageUrl, item.title)
+                } else {
+                    activeReader = item
+                }
+            }
         }
     }
 
