@@ -27,7 +27,11 @@ A title can contain its own `episodes`, `chapters`, `children`, or `parts` array
           "id": "episode-1",
           "title": "Episode 1",
           "streamUrl": "https://cdn.example.org/video/episode-1.m3u8",
-          "mimeType": "application/x-mpegURL"
+          "mimeType": "application/x-mpegURL",
+          "headers": {
+            "Referer": "https://example.org/",
+            "User-Agent": "ExamplePlayer/1.0"
+          }
         },
         {
           "id": "episode-2",
@@ -62,7 +66,7 @@ A title can contain its own `episodes`, `chapters`, `children`, or `parts` array
 }
 ```
 
-For streams whose URL doesn't end in a known file extension, set `mimeType` to one of `application/x-mpegURL`, `application/vnd.apple.mpegurl`, `application/dash+xml`, `video/mp4`, or `video/webm`. A source can also put `mime_type` or `streamMimeType` on the entry. HLS and DASH require compatible manifests and codecs; unsupported formats, DRM, and access-control challenges will not play.
+For streams that require request headers, include a `headers` object on the video item or its parent title. Supported headers are applied to the video requests; they are stored locally with the item. Do not publish private access tokens or cookies in a public feed. For streams whose URL doesn't end in a known file extension, set `mimeType` to one of `application/x-mpegURL`, `application/vnd.apple.mpegurl`, `application/dash+xml`, `video/mp4`, or `video/webm`. A source can also put `mime_type` or `streamMimeType` on the entry. HLS and DASH require compatible manifests and codecs; unsupported formats, DRM, and access-control challenges will not play.
 
 ## Single item examples
 
@@ -103,7 +107,8 @@ A novel chapter can provide inline text or a plain-text URL:
 | `subtitle`, `description`, `summary` | Metadata |
 | `coverUrl`, `poster`, `thumbnail`, `image` | Artwork |
 | `streamUrl`, `playUrl`, `videoUrl`, `file`, `src`, `hls`, `mp4` | Direct video URL |
-| `mimeType`, `mime_type`, `streamMimeType` | Optional stream MIME type |
+| `mimeType`, `mime_type`, `streamMimeType`, `format` | Optional stream MIME type |
+| `headers`, `requestHeaders` | Optional HTTP headers for that stream, such as Referer or User-Agent |
 | `pageUrl`, `webUrl`, `detailUrl`, `link` | Website page |
 | `pages`, `pageUrls`, `images` | Manga/comic image pages |
 | `content`, `text`, `chapterText`, `body` | Inline readable text |
