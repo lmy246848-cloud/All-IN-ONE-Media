@@ -121,7 +121,7 @@ fun AllInOneApp() {
     var activeVideo by remember { mutableStateOf<MediaCard?>(null) }
     var activeReader by remember { mutableStateOf<MediaCard?>(null) }
     var activeManga by remember { mutableStateOf<MediaCard?>(null) }
-    var activeBrowser by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var activeBrowser by remember { mutableStateOf<Triple<String, String, Map<String, String>>?>(null) }
 
     LaunchedEffect(Unit) { delay(1250); showSplash = false }
 
@@ -141,8 +141,8 @@ fun AllInOneApp() {
         try { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } catch (_: Exception) { }
     }
 
-    fun openInApp(url: String, title: String) {
-        if (url.startsWith("https://", true)) activeBrowser = title to url
+    fun openInApp(url: String, title: String, headers: Map<String, String> = emptyMap()) {
+        if (url.startsWith("https://", true)) activeBrowser = Triple(title, url, headers)
     }
 
     fun openItem(item: MediaCard) {
@@ -170,7 +170,7 @@ fun AllInOneApp() {
             else -> {
                 if (item.pageUrl.isNotBlank() && item.childItems.isEmpty() && item.pages.isEmpty() &&
                     item.textContent.isBlank() && item.textUrl.isBlank() && item.streamUrl.isBlank()) {
-                    openInApp(item.pageUrl, item.title)
+                    openInApp(item.pageUrl, item.title, item.httpHeaders)
                 } else {
                     activeReader = item
                 }
@@ -182,7 +182,7 @@ fun AllInOneApp() {
         when {
             item.streamUrl.isNotBlank() -> activeVideo = item
             item.id.startsWith("mangadex-") || item.textUrl.isNotBlank() || item.pages.isNotEmpty() || item.textContent.isNotBlank() -> openItem(item)
-            item.pageUrl.startsWith("https://", true) -> openInApp(item.pageUrl, item.title)
+            item.pageUrl.startsWith("https://", true) -> openInApp(item.pageUrl, item.title, item.httpHeaders)
             else -> activeReader = item
         }
     }
@@ -222,7 +222,7 @@ fun AllInOneApp() {
             syncMessage = "Connecting to " + provider.name + "…"
             try {
                 val loaded = CatalogService.fetchProvider(provider)
-                val updated = sourceItems.filterNot { it.providerName == provider.name } + loaded
+                val updated = sourceItems.filterNot { it.providerId == provider.id || (it.providerId.isBlank() && it.providerName == provider.name) } + loaded
                 sourceItems = updated
                 store.saveSourceItems(updated)
                 syncMessage = if (loaded.isEmpty()) "Connected, but this source returned no titles. Check its feed format and URL." else "Loaded " + loaded.size + " items from " + provider.name
@@ -350,7 +350,7 @@ fun AllInOneApp() {
                             onRemove = { provider ->
                                 providers = providers.filterNot { it.id == provider.id }
                                 store.saveProviders(providers)
-                                sourceItems = sourceItems.filterNot { it.providerName == provider.name }
+                                sourceItems = sourceItems.filterNot { it.providerId == provider.id || (it.providerId.isBlank() && it.providerName == provider.name) }
                                 store.saveSourceItems(sourceItems)
                             },
                             onSync = { syncProvider(it) }, onOpen = { openItem(it) },
@@ -384,12 +384,13 @@ fun AllInOneApp() {
         ReaderDialog(
             item = item,
             onDismiss = { activeReader = null },
-            onOpenSource = { openInApp(it, item.title) },
-            onOpenChild = { openChild(it) }
+            onOpenSource = { url, headers -> openInApp(url, item.title, headers) },
+            onOpenChild = { openChild(it) },
+            onPlay = { activeVideo = it }
         )
     }
     activeBrowser?.let { browser ->
-        InAppBrowserDialog(title = browser.first, url = browser.second, onDismiss = { activeBrowser = null })
+        InAppBrowserDialog(title = browser.first, url = browser.second, headers = browser.third, onDismiss = { activeBrowser = null })
     }
 }
 
@@ -984,7 +985,7 @@ private fun SettingsScreen(
             }
         }
         Spacer(Modifier.height(10.dp))
-        Text("All IN ONE Media • Version 0.4.0", color = secondary, fontSize = 11.sp)
+        Text("All IN ONE Media • Version 0.4.1", color = secondary, fontSize = 11.sp)
         Text("Your library, providers, and settings are stored locally on this device.", color = secondary, fontSize = 10.sp)
     }
 }
@@ -992,8 +993,8 @@ private fun SettingsScreen(
 
 @Composable
 private fun ReaderDialog(
-    item: MediaCard, onDismiss: () -> Unit, onOpenSource: (String) -> Unit,
-    onOpenChild: (MediaCard) -> Unit
+    item: MediaCard, onDismiss: () -> Unit, onOpenSource: (String, Map<String, String>) -> Unit,
+    onOpenChild: (MediaCard) -> Unit, onPlay: (MediaCard) -> Unit
 ) {
     var pageIndex by remember(item.id) { mutableIntStateOf(0) }
     var fontSize by remember(item.id) { mutableFloatStateOf(17f) }
@@ -1101,8 +1102,15 @@ private fun ReaderDialog(
                             }
                         }
                         Text("Direct chapter pages, text and supported video streams open in the app. Website-only sources open in the in-app browser. A catalogue entry by itself does not include a playable episode.", color = SoftText, fontSize = 11.sp)
+                        if (item.streamUrl.isNotBlank()) {
+                            Button(onClick = { onPlay(item) }, modifier = Modifier.fillMaxWidth()) {
+                                Icon(Icons.Filled.PlayArrow, contentDescription = null)
+                                Spacer(Modifier.width(7.dp))
+                                Text(if (item.mimeType.startsWith("audio/")) "Play audio" else "Play video")
+                            }
+                        }
                         if (item.pageUrl.isNotBlank()) {
-                            Button(onClick = { onOpenSource(item.pageUrl) }, modifier = Modifier.fillMaxWidth()) {
+                            Button(onClick = { onOpenSource(item.pageUrl, item.httpHeaders) }, modifier = Modifier.fillMaxWidth()) {
                                 Icon(Icons.Filled.Explore, contentDescription = null)
                                 Spacer(Modifier.width(7.dp))
                                 Text("Open source inside app")
@@ -1211,9 +1219,9 @@ private fun MangaDetailsDialog(
 }
 
 @Composable
-private fun InAppBrowserDialog(title: String, url: String, onDismiss: () -> Unit) {
+private fun InAppBrowserDialog(title: String, url: String, headers: Map<String, String>, onDismiss: () -> Unit) {
     val context = LocalContext.current
-    val webView = remember(url) {
+    val webView = remember(url, headers) {
         WebView(context).apply {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
@@ -1232,7 +1240,7 @@ private fun InAppBrowserDialog(title: String, url: String, onDismiss: () -> Unit
                 }
             }
             webChromeClient = WebChromeClient()
-            loadUrl(url)
+            loadUrl(url, headers)
         }
     }
     DisposableEffect(webView) {
