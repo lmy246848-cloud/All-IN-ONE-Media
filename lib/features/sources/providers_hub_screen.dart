@@ -219,7 +219,7 @@ class _HubPhoneView extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 24),
-          if (mangayomi != null) [
+          if (mangayomi != null) ...[
             const _SectionLabel('ALL'),
             const SizedBox(height: 12),
             _EcoRow(
