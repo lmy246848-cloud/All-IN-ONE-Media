@@ -4,7 +4,7 @@ All provider URLs must use HTTPS. Add a provider from the app's **Extensions** p
 
 ## JSON catalogue
 
-The endpoint may return either a JSON array or an object containing an `items` array (a `results` array is also accepted).
+The endpoint may return a JSON array directly, a single title object, or a wrapper object containing an array under `items`, `results`, `data`, `titles`, `entries`, `list`, `catalog`, `catalogue`, `manga`, `anime`, `books`, `streams`, or `chapters`. Wrapper objects may be nested (for example, `data.items`). A JSON-encoded string containing an array/object is also unwrapped. Individual array entries may be objects or title strings/HTTPS links.
 
 ```json
 {
@@ -50,8 +50,8 @@ The endpoint may return either a JSON array or an object containing an `items` a
 | `subtitle` | No | Short metadata |
 | `coverUrl` | No | HTTPS artwork URL |
 | `pageUrl` / `link` | No | External title/source page |
-| `streamUrl` / `url` | No | Direct playable media URL |
-| `pages` | No | Array of HTTPS page-image URLs for manga/manhwa reading |
+| `streamUrl` / `stream_url` / `playUrl` / `url` | No | Direct playable media URL; common `file`, `src`, `hls`, and `mp4` fields are also recognised |
+| `pages` / `images` | No | Array of HTTPS page-image URLs; a JSON-array string or one HTTPS page URL is also accepted |
 | `content` | No | Plain text content for the in-app novel reader |
 | `description` | No | Summary text |
 
@@ -66,3 +66,28 @@ A direct URL ending in `.mp4`, `.m3u8`, `.mpd`, `.webm`, or `.m4v` becomes a pla
 ## Security and compatibility
 
 The app does not execute downloaded Kotlin, JavaScript, or other code. Providers are data feeds and media links only. Use sources you own or are authorised to access. DRM-protected content and providers requiring custom authentication/signing are not supported by this version.
+
+
+## Flexible response example
+
+These wrappers are also accepted:
+
+```json
+{
+  "data": {
+    "titles": [
+      {
+        "id": "manga-001",
+        "attributes": {
+          "title": "Example Manga",
+          "category": "Manga",
+          "cover": "https://cdn.example.org/cover.jpg",
+          "pages": "[\"https://cdn.example.org/1.jpg\", \"https://cdn.example.org/2.jpg\"]"
+        }
+      }
+    ]
+  }
+}
+```
+
+A plain array such as `["https://cdn.example.org/video/episode-1.mp4"]` is also accepted. The app treats each string as a title or a direct media URL.

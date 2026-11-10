@@ -42,6 +42,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -62,13 +64,37 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private val Night = Color(0xFF090812)
-private val Panel = Color(0xCC171326)
-private val PanelRaised = Color(0xB3211A35)
+private val Panel = Color(0x6618152B)
+private val PanelRaised = Color(0x96271D40)
 private val Purple = Color(0xFFB58CFF)
 private val Pink = Color(0xFFFF78D2)
 private val Aqua = Color(0xFF64E6DB)
 private val SoftText = Color(0xFFB8B1C8)
 private val categories = listOf("Anime", "Donghua", "Movies", "Series", "Manga", "Manhwa", "Light Novels", "Shorts")
+
+private fun Modifier.liquidGlass(shape: RoundedCornerShape = RoundedCornerShape(18.dp)): Modifier =
+    this.clip(shape)
+        .background(
+            Brush.linearGradient(
+                listOf(
+                    Color.White.copy(alpha = 0.15f),
+                    Color.White.copy(alpha = 0.045f),
+                    Purple.copy(alpha = 0.075f)
+                )
+            ),
+            shape
+        )
+        .border(
+            1.dp,
+            Brush.linearGradient(
+                listOf(
+                    Color.White.copy(alpha = 0.40f),
+                    Color.White.copy(alpha = 0.09f),
+                    Aqua.copy(alpha = 0.17f)
+                )
+            ),
+            shape
+        )
 
 @Composable
 fun AllInOneApp() {
@@ -91,7 +117,7 @@ fun AllInOneApp() {
     LaunchedEffect(Unit) { delay(1250); showSplash = false }
 
     val background = if (darkTheme) Color(0xFF080713) else Color(0xFFF0ECF8)
-    val surface = if (darkTheme) Panel else Color(0xCCFFFFFF)
+    val surface = if (darkTheme) Panel else Color(0x99FFFFFF)
     val foreground = if (darkTheme) Color.White else Color(0xFF211A30)
     val secondary = if (darkTheme) SoftText else Color(0xFF665D73)
 
@@ -119,9 +145,9 @@ fun AllInOneApp() {
                 val updated = sourceItems.filterNot { it.providerName == provider.name } + loaded
                 sourceItems = updated
                 store.saveSourceItems(updated)
-                syncMessage = "Loaded " + loaded.size + " items from " + provider.name
+                syncMessage = if (loaded.isEmpty()) "Connected, but this source returned no titles. Check its feed format and URL." else "Loaded " + loaded.size + " items from " + provider.name
             } catch (e: Exception) {
-                syncMessage = "Could not load provider: " + (e.message ?: "network error")
+                syncMessage = "Could not load provider: " + (e.message ?: "network error").take(190)
             } finally { syncingId = "" }
         }
     }
@@ -140,7 +166,12 @@ fun AllInOneApp() {
         Scaffold(
             containerColor = Color.Transparent,
             bottomBar = {
-                NavigationBar(containerColor = surface.copy(alpha = 0.68f), tonalElevation = 0.dp) {
+                NavigationBar(
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
+                        .clip(RoundedCornerShape(24.dp))
+                        .border(1.dp, Color.White.copy(alpha = 0.22f), RoundedCornerShape(24.dp)),
+                    containerColor = surface.copy(alpha = 0.62f), tonalElevation = 0.dp
+                ) {
                     listOf("Home", "Discover", "Library", "Extensions", "Settings").forEach { tab ->
                         val icon = when (tab) {
                             "Home" -> Icons.Filled.Home
@@ -163,7 +194,34 @@ fun AllInOneApp() {
                 }
             }
         ) { insets ->
-            Column(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(background, if (darkTheme) Color(0xFF1C1230) else Color(0xFFE6DDF4), background))).padding(insets)) {
+            Column(
+                Modifier.fillMaxSize()
+                    .background(Brush.linearGradient(listOf(background, if (darkTheme) Color(0xFF1C1230) else Color(0xFFE6DDF4), background)))
+                    .drawBehind {
+                        val glowRadius = size.minDimension * 0.58f
+                        val upperGlowCenter = Offset(size.width * 0.10f, size.height * 0.14f)
+                        val lowerGlowCenter = Offset(size.width * 0.92f, size.height * 0.72f)
+                        drawCircle(
+                            brush = Brush.radialGradient(
+                                listOf(Purple.copy(alpha = if (darkTheme) 0.20f else 0.11f), Color.Transparent),
+                                center = upperGlowCenter,
+                                radius = glowRadius
+                            ),
+                            radius = glowRadius,
+                            center = upperGlowCenter
+                        )
+                        drawCircle(
+                            brush = Brush.radialGradient(
+                                listOf(Aqua.copy(alpha = if (darkTheme) 0.12f else 0.07f), Color.Transparent),
+                                center = lowerGlowCenter,
+                                radius = glowRadius * 0.82f
+                            ),
+                            radius = glowRadius * 0.82f,
+                            center = lowerGlowCenter
+                        )
+                    }
+                    .padding(insets)
+            ) {
                 Row(
                     Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, top = 14.dp, bottom = 10.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -284,7 +342,8 @@ private fun HomeScreen(
         item {
             Box(
                 Modifier.fillMaxWidth().clip(RoundedCornerShape(25.dp))
-                    .background(Brush.linearGradient(listOf(Color(0xFF472080), Color(0xFF201338), Color(0xFF111020))))
+                    .background(Brush.linearGradient(listOf(Color(0xCC472080), Color(0xB3201338), Color(0xA6111020))))
+                    .border(1.dp, Brush.linearGradient(listOf(Color.White.copy(alpha = 0.42f), Color.White.copy(alpha = 0.06f), Aqua.copy(alpha = 0.15f))), RoundedCornerShape(25.dp))
                     .padding(20.dp)
             ) {
                 Column {
@@ -325,7 +384,7 @@ private fun HomeScreen(
                 TextButton(onClick = onDiscover) { Text("Browse", color = Purple) }
             }
             if (providerItems.isEmpty()) {
-                Card(colors = CardDefaults.cardColors(containerColor = surface), shape = RoundedCornerShape(18.dp)) {
+                Card(modifier = Modifier.fillMaxWidth().liquidGlass(RoundedCornerShape(18.dp)), colors = CardDefaults.cardColors(containerColor = Color.Transparent), shape = RoundedCornerShape(18.dp)) {
                     Column(Modifier.fillMaxWidth().padding(16.dp)) {
                         Text("No synced titles yet", color = foreground, fontWeight = FontWeight.SemiBold)
                         Text("Open Extensions, install or add a source, then tap Sync. Its titles will appear here.", color = secondary, fontSize = 12.sp)
@@ -348,7 +407,7 @@ private fun HomeScreen(
         }
         if (library.isEmpty()) {
             item {
-                Card(colors = CardDefaults.cardColors(containerColor = surface), shape = RoundedCornerShape(18.dp)) {
+                Card(modifier = Modifier.fillMaxWidth().liquidGlass(RoundedCornerShape(18.dp)), colors = CardDefaults.cardColors(containerColor = Color.Transparent), shape = RoundedCornerShape(18.dp)) {
                     Column(Modifier.fillMaxWidth().padding(18.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(Icons.Filled.Bookmark, contentDescription = null, tint = Purple, modifier = Modifier.size(28.dp))
                         Spacer(Modifier.height(6.dp))
@@ -375,7 +434,7 @@ private fun CategoryTile(
         "Manga", "Manhwa", "Light Novels" -> Icons.Filled.MenuBook
         else -> Icons.Filled.PlayArrow
     }
-    Card(modifier = modifier.height(83.dp).clickable { onClick() }, colors = CardDefaults.cardColors(containerColor = surface), shape = RoundedCornerShape(18.dp)) {
+    Card(modifier = modifier.height(83.dp).liquidGlass(RoundedCornerShape(18.dp)).clickable { onClick() }, colors = CardDefaults.cardColors(containerColor = Color.Transparent), shape = RoundedCornerShape(18.dp)) {
         Row(Modifier.fillMaxSize().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(43.dp).clip(RoundedCornerShape(14.dp)).background(Purple.copy(alpha = 0.15f)), contentAlignment = Alignment.Center) {
                 Icon(icon, contentDescription = null, tint = Purple, modifier = Modifier.size(24.dp))
@@ -481,7 +540,7 @@ private fun ShortVideoCard(
     item: MediaCard, saved: Boolean, onSave: (MediaCard) -> Unit,
     onOpen: (MediaCard) -> Unit, onPlay: (MediaCard) -> Unit, onDownload: (MediaCard) -> Unit
 ) {
-    Card(colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(18.dp)) {
+    Card(modifier = Modifier.fillMaxWidth().liquidGlass(RoundedCornerShape(18.dp)), colors = CardDefaults.cardColors(containerColor = Color.Transparent), shape = RoundedCornerShape(18.dp)) {
         Column(Modifier.fillMaxWidth().padding(10.dp)) {
             if (item.coverUrl.isNotBlank()) {
                 AsyncImage(model = item.coverUrl, contentDescription = item.title,
@@ -519,7 +578,7 @@ private fun ShortVideoCard(
 private fun LoadingCard() {
     val transition = rememberInfiniteTransition(label = "loading")
     val alpha = transition.animateFloat(0.25f, 0.8f, infiniteRepeatable(tween(850), repeatMode = RepeatMode.Reverse), label = "pulse")
-    Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(17.dp)) {
+    Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).liquidGlass(RoundedCornerShape(17.dp)), colors = CardDefaults.cardColors(containerColor = Color.Transparent), shape = RoundedCornerShape(17.dp)) {
         Row(Modifier.padding(13.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(70.dp, 88.dp).clip(RoundedCornerShape(10.dp)).background(Purple.copy(alpha = alpha.value)))
             Spacer(Modifier.width(12.dp))
@@ -537,7 +596,7 @@ private fun MediaCardRow(
     item: MediaCard, saved: Boolean, onSave: (MediaCard) -> Unit,
     onOpen: (MediaCard) -> Unit, onPlay: (MediaCard) -> Unit, onDownload: (MediaCard) -> Unit
 ) {
-    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(17.dp)) {
+    Card(modifier = Modifier.fillMaxWidth().liquidGlass(RoundedCornerShape(17.dp)), colors = CardDefaults.cardColors(containerColor = Color.Transparent), shape = RoundedCornerShape(17.dp)) {
         Row(Modifier.padding(11.dp), verticalAlignment = Alignment.CenterVertically) {
             if (item.coverUrl.isNotBlank()) {
                 AsyncImage(model = item.coverUrl, contentDescription = item.title, modifier = Modifier.size(76.dp, 98.dp).clip(RoundedCornerShape(11.dp)))
@@ -583,7 +642,7 @@ private fun LibraryScreen(
         Text(savedItems.size.toString() + " saved titles and sources", color = secondary, fontSize = 12.sp)
         Spacer(Modifier.height(11.dp))
         if (savedItems.isEmpty()) {
-            Card(colors = CardDefaults.cardColors(containerColor = surface), shape = RoundedCornerShape(18.dp)) {
+            Card(modifier = Modifier.fillMaxWidth().liquidGlass(RoundedCornerShape(18.dp)), colors = CardDefaults.cardColors(containerColor = Color.Transparent), shape = RoundedCornerShape(18.dp)) {
                 Column(Modifier.fillMaxWidth().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(Icons.Filled.Bookmark, contentDescription = null, tint = Purple, modifier = Modifier.size(30.dp))
                     Text("Your library is empty", color = foreground, fontWeight = FontWeight.Bold)
@@ -602,7 +661,7 @@ private fun LibraryScreen(
 
 @Composable
 private fun CompactLibraryRow(item: MediaCard, foreground: Color, secondary: Color, surface: Color) {
-    Card(colors = CardDefaults.cardColors(containerColor = surface), shape = RoundedCornerShape(14.dp)) {
+    Card(modifier = Modifier.fillMaxWidth().liquidGlass(RoundedCornerShape(14.dp)), colors = CardDefaults.cardColors(containerColor = Color.Transparent), shape = RoundedCornerShape(14.dp)) {
         Row(Modifier.fillMaxWidth().padding(11.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).background(Purple.copy(alpha = 0.16f)), contentAlignment = Alignment.Center) {
                 Text(item.title.take(1).uppercase(), color = Purple, fontWeight = FontWeight.Bold)
@@ -636,8 +695,8 @@ private fun ProviderManagerScreen(
         Text("Add a source link, apply it, then sync its titles.", color = secondary, fontSize = 12.sp)
         Spacer(Modifier.height(11.dp))
         Card(
-            modifier = Modifier.fillMaxWidth().border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(22.dp)),
-            colors = CardDefaults.cardColors(containerColor = surface.copy(alpha = 0.78f)),
+            modifier = Modifier.fillMaxWidth().liquidGlass(RoundedCornerShape(22.dp)),
+            colors = CardDefaults.cardColors(containerColor = Color.Transparent),
             shape = RoundedCornerShape(22.dp)
         ) {
             Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -647,7 +706,13 @@ private fun ProviderManagerScreen(
                     label = { Text("Extension name (optional)") },
                     placeholder = { Text("e.g. Anime source") },
                     modifier = Modifier.fillMaxWidth(), singleLine = true,
-                    shape = RoundedCornerShape(15.dp)
+                    shape = RoundedCornerShape(15.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        unfocusedContainerColor = Color.White.copy(alpha = 0.035f),
+                        focusedContainerColor = Color.White.copy(alpha = 0.075f),
+                        unfocusedBorderColor = Color.White.copy(alpha = 0.22f),
+                        focusedBorderColor = Purple.copy(alpha = 0.85f)
+                    )
                 )
                 Text("Content type", color = secondary, fontSize = 11.sp)
                 androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -699,7 +764,7 @@ private fun ProviderManagerScreen(
                 }
             }
         }
-        if (message.isNotBlank()) Text(message, color = secondary, fontSize = 11.sp, modifier = Modifier.padding(vertical = 8.dp))
+        if (message.isNotBlank()) Text(message, color = if (message.startsWith("Could not load", true)) Pink else Aqua, fontSize = 11.sp, modifier = Modifier.padding(vertical = 8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Your extensions (" + providers.size + ")", color = foreground, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
             Text("Tap Sync after adding", color = secondary, fontSize = 10.sp)
@@ -713,8 +778,8 @@ private fun ProviderManagerScreen(
         ) {
             items(providers, key = { it.id }) { provider ->
                 Card(
-                    modifier = Modifier.fillMaxWidth().border(1.dp, Color.White.copy(alpha = 0.14f), RoundedCornerShape(18.dp)),
-                    colors = CardDefaults.cardColors(containerColor = surface.copy(alpha = 0.76f)),
+                    modifier = Modifier.fillMaxWidth().liquidGlass(RoundedCornerShape(18.dp)),
+                    colors = CardDefaults.cardColors(containerColor = Color.Transparent),
                     shape = RoundedCornerShape(18.dp)
                 ) {
                     Column(Modifier.fillMaxWidth().padding(13.dp)) {
@@ -758,7 +823,7 @@ private fun SettingsScreen(
         Text("Settings", color = foreground, fontSize = 23.sp, fontWeight = FontWeight.ExtraBold)
         Text("Personalise your media experience.", color = secondary, fontSize = 12.sp)
         Spacer(Modifier.height(13.dp))
-        Card(colors = CardDefaults.cardColors(containerColor = surface), shape = RoundedCornerShape(17.dp)) {
+        Card(modifier = Modifier.fillMaxWidth().liquidGlass(RoundedCornerShape(17.dp)), colors = CardDefaults.cardColors(containerColor = Color.Transparent), shape = RoundedCornerShape(17.dp)) {
             Column(Modifier.padding(15.dp)) {
                 Text("Appearance", color = foreground, fontWeight = FontWeight.Bold)
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -771,7 +836,7 @@ private fun SettingsScreen(
             }
         }
         Spacer(Modifier.height(10.dp))
-        Card(colors = CardDefaults.cardColors(containerColor = surface), shape = RoundedCornerShape(17.dp)) {
+        Card(modifier = Modifier.fillMaxWidth().liquidGlass(RoundedCornerShape(17.dp)), colors = CardDefaults.cardColors(containerColor = Color.Transparent), shape = RoundedCornerShape(17.dp)) {
             Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                 Text("Movie & series catalogue", color = foreground, fontWeight = FontWeight.Bold)
                 Text("TMDB requires a free API key. Create one on themoviedb.org and paste the v3 API key here. The app stores it on this device.", color = secondary, fontSize = 11.sp)
@@ -780,7 +845,7 @@ private fun SettingsScreen(
             }
         }
         Spacer(Modifier.height(10.dp))
-        Card(colors = CardDefaults.cardColors(containerColor = surface), shape = RoundedCornerShape(17.dp)) {
+        Card(modifier = Modifier.fillMaxWidth().liquidGlass(RoundedCornerShape(17.dp)), colors = CardDefaults.cardColors(containerColor = Color.Transparent), shape = RoundedCornerShape(17.dp)) {
             Column(Modifier.padding(15.dp)) {
                 Text("Downloads", color = foreground, fontWeight = FontWeight.Bold)
                 Text("Open Android's download manager to view completed and active downloads.", color = secondary, fontSize = 11.sp)
@@ -792,7 +857,7 @@ private fun SettingsScreen(
             }
         }
         Spacer(Modifier.height(10.dp))
-        Text("All IN ONE Media • Version 0.3.0", color = secondary, fontSize = 11.sp)
+        Text("All IN ONE Media • Version 0.3.3", color = secondary, fontSize = 11.sp)
         Text("Your library, providers, and settings are stored locally on this device.", color = secondary, fontSize = 10.sp)
     }
 }
