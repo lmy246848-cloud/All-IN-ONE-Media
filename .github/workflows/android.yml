@@ -53,10 +53,19 @@ jobs:
             echo "signing_mode=stable-release" >> "$GITHUB_OUTPUT"
           else
             echo "::warning::Stable signing secrets are not configured. This APK uses a temporary runner debug key; future CI builds will not be update-compatible until stable signing is configured."
-            gradle --no-daemon :app:assembleDebug
-            echo "apk_path=app/build/outputs/apk/debug/app-debug.apk" >> "$GITHUB_OUTPUT"
+            gradle --no-daemon :app:assembleRelease
+            echo "apk_path=app/build/outputs/apk/release/app-release.apk" >> "$GITHUB_OUTPUT"
             echo "signing_mode=temporary-debug" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Verify APK package and signature
+        env:
+          APK_PATH: ${{ steps.build.outputs.apk_path }}
+        run: |
+          test -s "$APK_PATH"
+          unzip -t "$APK_PATH" >/dev/null
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK_PATH"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK_PATH" | head -n 8
 
       - name: Prepare direct APK
         env:
@@ -70,10 +79,10 @@ jobs:
         if: github.ref == 'refs/heads/scratch-rebuild'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v0.4.0-build-${{ github.run_number }}
-          name: All IN ONE Media v0.4.0 (build ${{ github.run_number }})
+          tag_name: v0.4.1-build-${{ github.run_number }}
+          name: All IN ONE Media v0.4.1 (build ${{ github.run_number }})
           body: |
-            All IN ONE Media v0.4.0.
+            All IN ONE Media v0.4.1.
             Adds nested episode/chapter provider feeds, MIME-aware MP4/HLS/DASH playback, MangaDex chapter reading, public-domain Gutenberg book text, Internet Archive MP4 playback, and an in-app HTTPS browser.
             This does not execute Mihon, Aniyomi, CloudStream, or LNReader extension packages. See README and provider documentation for compatibility.
             This build keeps the separate application ID and uses temporary debug signing unless stable signing secrets are configured.
@@ -92,6 +101,6 @@ jobs:
       - name: Keep Actions artifact
         uses: actions/upload-artifact@v4
         with:
-          name: All-IN-ONE-Media-v0.4.0-APK
+          name: All-IN-ONE-Media-v0.4.1-APK
           path: dist/All-IN-ONE-Media.apk
           if-no-files-found: error
