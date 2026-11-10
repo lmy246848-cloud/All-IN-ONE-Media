@@ -56,11 +56,23 @@ data class MediaCard(
     }
 }
 
-data class MediaProvider(val id: String, val name: String, val category: String, val url: String, val enabled: Boolean = true) {
-    fun toJson() = JSONObject().put("id", id).put("name", name).put("category", category).put("url", url).put("enabled", enabled)
+data class MediaProvider(
+    val id: String, val name: String, val category: String, val url: String,
+    val enabled: Boolean = true, val headers: Map<String, String> = emptyMap()
+) {
+    fun toJson() = JSONObject().put("id", id).put("name", name).put("category", category)
+        .put("url", url).put("enabled", enabled).put("headers", JSONObject(headers))
     companion object {
-        fun fromJson(o: JSONObject) = MediaProvider(o.optString("id"), o.optString("name"),
-            o.optString("category", "All"), o.optString("url"), o.optBoolean("enabled", true))
+        fun fromJson(o: JSONObject) = MediaProvider(
+            o.optString("id"), o.optString("name"), o.optString("category", "All"),
+            o.optString("url"), o.optBoolean("enabled", true),
+            o.optJSONObject("headers")?.let { objectValue ->
+                objectValue.keys().asSequence().mapNotNull { key ->
+                    val value = objectValue.optString(key)
+                    if (isValidMediaHeader(key, value)) key to value else null
+                }.toMap()
+            } ?: emptyMap()
+        )
     }
 }
 
@@ -113,7 +125,10 @@ object CatalogService {
 
     private data class HttpTextResponse(val body: String, val contentType: String)
 
-    private fun requestDetailed(url: String, method: String = "GET", body: String? = null): HttpTextResponse {
+    private fun requestDetailed(
+        url: String, method: String = "GET", body: String? = null,
+        headers: Map<String, String> = emptyMap()
+    ): HttpTextResponse {
         val connection = URL(url).openConnection() as HttpURLConnection
         try {
             connection.requestMethod = method
@@ -122,6 +137,9 @@ object CatalogService {
             connection.readTimeout = 20000
             connection.setRequestProperty("User-Agent", "AllInOneMedia/0.4 Android")
             connection.setRequestProperty("Accept", "application/json, application/x-mpegURL, audio/x-mpegurl, text/plain, text/html, */*")
+            headers.filter { (key, value) -> isValidMediaHeader(key, value) }.forEach { (key, value) ->
+                connection.setRequestProperty(key, value)
+            }
             if (body != null) {
                 connection.doOutput = true
                 connection.setRequestProperty("Content-Type", "application/json")
@@ -323,9 +341,21 @@ object CatalogService {
         }
     }
 
-    suspend fun fetchPlainText(url: String): String = withContext(Dispatchers.IO) {
+    suspend fun fetchPlainText(url: String, headers: Map<String, String> = emptyMap()): String = withContext(Dispatchers.IO) {
         require(url.startsWith("https://", true)) { "The book text link must use HTTPS." }
-        request(url)
+        requestDetailed(url, headers = headers).body
+    }
+
+    fun parseHeadersJson(raw: String): Map<String, String> {
+        if (raw.isBlank()) return emptyMap()
+        val parsed = JSONTokener(raw).nextValue()
+        val obj = parsed as? JSONObject ?: throw IllegalArgumentException("Request headers must be a JSON object.")
+        val result = obj.keys().asSequence().mapNotNull { key ->
+            val value = obj.optString(key)
+            if (isValidMediaHeader(key, value)) key to value else null
+        }.toMap()
+        if (result.size != obj.length()) throw IllegalArgumentException("One or more header names or values are invalid.")
+        return result
     }
 
     suspend fun archiveStream(identifier: String): String = withContext(Dispatchers.IO) {
@@ -600,7 +630,7 @@ object CatalogService {
                 parsedUrl?.host?.isNotBlank() == true
         ) { "Enter a complete HTTPS provider URL." }
 
-        val detectedMime = if (isPlayable(url)) guessMimeType(url) else probeStreamMimeType(url)
+        val detectedMime = if (isPlayable(url)) guessMimeType(url) else probeStreamMimeType(url, provider.headers)
         if (isPlayable(url) || detectedMime.isNotBlank()) {
             return@withContext listOf(
                 MediaCard(
@@ -615,7 +645,7 @@ object CatalogService {
             )
         }
 
-        val response = requestDetailed(url)
+        val response = requestDetailed(url, headers = provider.headers)
         if (response.contentType.contains("text/html") || response.body.trimStart().startsWith("<!doctype html", true) ||
             response.body.trimStart().startsWith("<html", true)) {
             val pageTitle = Regex("<title[^>]*>(.*?)</title>", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
@@ -654,7 +684,7 @@ object CatalogService {
     private fun attachDetectedMimeTypes(card: MediaCard): MediaCard {
         val children = card.childItems.map { attachDetectedMimeTypes(it) }
         val detected = if (card.streamUrl.isNotBlank() && card.mimeType.isBlank()) {
-            probeStreamMimeType(card.streamUrl)
+            probeStreamMimeType(card.streamUrl, card.httpHeaders)
         } else card.mimeType
         return card.copy(mimeType = detected.ifBlank { guessMimeType(card.streamUrl) }, childItems = children)
     }
@@ -697,7 +727,7 @@ object CatalogService {
         }
     }
 
-    private fun probeStreamMimeType(url: String): String {
+    private fun probeStreamMimeType(url: String, headers: Map<String, String> = emptyMap()): String {
         if (!isHttpsUrl(url)) return ""
         return try {
             val connection = URL(url).openConnection() as HttpURLConnection
@@ -707,6 +737,9 @@ object CatalogService {
                 connection.connectTimeout = 8000
                 connection.readTimeout = 8000
                 connection.setRequestProperty("User-Agent", "AllInOneMedia/0.4 Android")
+                headers.filter { (key, value) -> isValidMediaHeader(key, value) }.forEach { (key, value) ->
+                    connection.setRequestProperty(key, value)
+                }
                 val code = connection.responseCode
                 val type = connection.contentType?.substringBefore(";")?.trim()?.lowercase().orEmpty()
                 if (code in 200..299 && (
