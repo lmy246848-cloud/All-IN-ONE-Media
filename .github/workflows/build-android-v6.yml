@@ -1,0 +1,74 @@
+name: Build All IN ONE Media (Android ARM64 - v6)
+
+on:
+  push:
+    branches:
+      - all-in-one-media
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  android-arm64:
+    name: Build Android ARM64 APK
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Check out project
+        uses: actions/checkout@v4
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Install SVG renderer
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y librsvg2-bin fonts-dejavu-core
+      - name: Repair source script and prepare branding
+        run: |
+          python3 -c "import base64; exec(base64.b64decode('ZnJvbSBwYXRobGliIGltcG9ydCBQYXRoCnAgPSBQYXRoKCJzY3JpcHRzL3ByZXBhcmVfYWxsX2luX29uZV9tZWRpYS5weSIpCnNvdXJjZSA9IHAucmVhZF90ZXh0KGVuY29kaW5nPSJ1dGYtOCIpCnNvdXJjZSA9IHNvdXJjZS5yZXBsYWNlKCImbHQ7IiwgIjwiKS5yZXBsYWNlKCImZ3Q7IiwgIj4iKS5yZXBsYWNlKCImYW1wOyIsICImIikKc291cmNlID0gc291cmNlLnJlcGxhY2UoIiBldz0nJyciLCAibmV3PScnJyIpCmxpbmVzID0gc291cmNlLnNwbGl0bGluZXMoKQpmb3IgaSwgbGluZSBpbiBlbnVtZXJhdGUobGluZXMpOgogICAgaWYgKCJzdXBhYmFzZS5jbyIgaW4gbGluZSBvciAic3luYy56YW5nZXRzdS5vbmxpbmUiIGluIGxpbmUpIGFuZCAiZGVmYXVsdFZhbHVlOiAnJyksIiBpbiBsaW5lOgogICAgICAgIGxpbmVzW2ldID0gbGluZS5yZXBsYWNlKCIpLCIsICciKSwnLCAxKQogICAgZWxpZiAnc3RhdGljIGNvbnN0IFN0cmluZyBzaW1rbENsaWVudElkJyBpbiBsaW5lIGFuZCBsaW5lLmxzdHJpcCgpLnN0YXJ0c3dpdGgoImU9cmUuc3ViIik6CiAgICAgICAgbGluZXNbaV0gPSAnJydlPXJlLnN1YihyInN0YXRpYyBjb25zdCBTdHJpbmcgc2lta2xDbGllbnRJZCA9XHMqJ1teJ10rJzsiLCAic3RhdGljIGNvbnN0IFN0cmluZyBzaW1rbENsaWVudElkID0gJyc7IiwgZSwgY291bnQ9MSknJycKICAgIGVsaWYgJ3N0YXRpYyBjb25zdCBTdHJpbmcgc2lta2xDbGllbnRTZWNyZXQnIGluIGxpbmUgYW5kIGxpbmUubHN0cmlwKCkuc3RhcnRzd2l0aCgiZT1yZS5zdWIiKToKICAgICAgICBsaW5lc1tpXSA9ICcnJ2U9cmUuc3ViKHIic3RhdGljIGNvbnN0IFN0cmluZyBzaW1rbENsaWVudFNlY3JldCA9XHMqJ1teJ10rJzsiLCAic3RhdGljIGNvbnN0IFN0cmluZyBzaW1rbENsaWVudFNlY3JldCA9ICcnOyIsIGUsIGNvdW50PTEpJycnCiAgICBlbGlmICJleUpoYkdjaU9pSklVekkxTmlJc0luUjVjQ0k2SWtwWFZDSjkiIGluIGxpbmUgYW5kIGxpbmUubHN0cmlwKCkuc3RhcnRzd2l0aCgiZT1yZS5zdWIiKToKICAgICAgICBsaW5lc1tpXSA9ICcnJ2U9cmUuc3ViKHIiZGVmYXVsdFZhbHVlOlxzKihbXiddKydccyosIiwgImRlZmF1bHRWYWx1ZTogJycsIiwgZSwgY291bnQ9MSknJycKcC53cml0ZV90ZXh0KCJcbiIuam9pbihsaW5lcykgKyAiXG4iLCBlbmNvZGluZz0idXRmLTgiKQo='))"
+          python3 -m py_compile scripts/prepare_all_in_one_media.py
+          python3 scripts/prepare_all_in_one_media.py
+          rsvg-convert --width 512 --height 512 assets/icon/all_in_one_media.svg > assets/icon/app_icon.png
+          rsvg-convert --width 620 --height 90 assets/icon/all_in_one_wordmark.svg > assets/icon/wordmark.png
+      - name: Resolve Flutter dependencies
+        run: flutter pub get
+      - name: Format Shorts screen
+        run: dart format lib/features/short_drama/short_drama_screen.dart
+      - name: Generate launcher icons
+        run: dart run flutter_launcher_icons
+      - name: Build release APK (ARM64)
+        env:
+          GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.parallel=false -Dorg.gradle.workers.max=2
+        run: flutter build apk --release --target-platform android-arm64
+      - name: Rename APK
+        run: cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/All-IN-ONE-Media-1.0.0-arm64.apk
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: All-IN-ONE-Media-1.0.0-arm64
+          path: build/app/outputs/flutter-apk/All-IN-ONE-Media-1.0.0-arm64.apk
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publish GitHub prerelease
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: all-in-one-media-v1.0.0-build-${{ github.run_number }}
+          name: All IN ONE Media 1.0.0 (build ${{ github.run_number }})
+          body: |
+            ARM64 Android test build of All IN ONE Media.
+            Package: com.allinonemedia.entertainment
+            Source and third-party notices are included in the repository.
+          files: build/app/outputs/flutter-apk/All-IN-ONE-Media-1.0.0-arm64.apk
+          prerelease: true
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
