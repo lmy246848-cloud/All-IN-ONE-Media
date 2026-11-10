@@ -949,7 +949,7 @@ private fun SettingsScreen(
             }
         }
         Spacer(Modifier.height(10.dp))
-        Text("All IN ONE Media • Version 0.3.3", color = secondary, fontSize = 11.sp)
+        Text("All IN ONE Media • Version 0.4.0", color = secondary, fontSize = 11.sp)
         Text("Your library, providers, and settings are stored locally on this device.", color = secondary, fontSize = 10.sp)
     }
 }
@@ -986,25 +986,39 @@ private fun ReaderDialog(
                 }
                 if (item.pages.isNotEmpty()) {
                     if (item.providerName == "MangaDex") {
-                        Text("MangaDex • Please credit the original creators and scanlation group.", color = SoftText, fontSize = 10.sp)
+                        Text("MangaDex • Scroll vertically to read • Please credit creators and groups.", color = SoftText, fontSize = 10.sp)
+                        LazyColumn(
+                            Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(10.dp)).background(Color(0xFF050407)),
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            items(item.pages) { pageUrl ->
+                                AsyncImage(
+                                    model = pageUrl,
+                                    contentDescription = "Manga page",
+                                    contentScale = ContentScale.FillWidth,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        }
+                    } else {
+                        AsyncImage(
+                            model = item.pages[pageIndex.coerceIn(item.pages.indices)],
+                            contentDescription = "Page " + (pageIndex + 1),
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(10.dp))
+                                .background(Color(0xFF050407))
+                        )
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().padding(top = 10.dp)) {
+                            OutlinedButton(onClick = { pageIndex = (pageIndex - 1).coerceAtLeast(0) }, enabled = pageIndex > 0) { Text("Previous") }
+                            Text((pageIndex + 1).toString() + " / " + item.pages.size, color = SoftText, fontSize = 12.sp)
+                            Button(onClick = { pageIndex = (pageIndex + 1).coerceAtMost(item.pages.lastIndex) }, enabled = pageIndex < item.pages.lastIndex) { Text("Next") }
+                        }
+                        Slider(
+                            value = pageIndex.toFloat(), onValueChange = { pageIndex = it.toInt().coerceIn(item.pages.indices) },
+                            valueRange = 0f..(item.pages.lastIndex.coerceAtLeast(1)).toFloat(),
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
-                    AsyncImage(
-                        model = item.pages[pageIndex.coerceIn(item.pages.indices)],
-                        contentDescription = "Page " + (pageIndex + 1),
-                        contentScale = ContentScale.Fit,
-                        modifier = Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(10.dp))
-                            .background(Color(0xFF050407))
-                    )
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().padding(top = 10.dp)) {
-                        OutlinedButton(onClick = { pageIndex = (pageIndex - 1).coerceAtLeast(0) }, enabled = pageIndex > 0) { Text("Previous") }
-                        Text((pageIndex + 1).toString() + " / " + item.pages.size, color = SoftText, fontSize = 12.sp)
-                        Button(onClick = { pageIndex = (pageIndex + 1).coerceAtMost(item.pages.lastIndex) }, enabled = pageIndex < item.pages.lastIndex) { Text("Next") }
-                    }
-                    Slider(
-                        value = pageIndex.toFloat(), onValueChange = { pageIndex = it.toInt().coerceIn(item.pages.indices) },
-                        valueRange = 0f..(item.pages.lastIndex.coerceAtLeast(1)).toFloat(),
-                        modifier = Modifier.fillMaxWidth()
-                    )
                 } else if (item.textContent.isNotBlank()) {
                     Column(Modifier.fillMaxWidth().weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
