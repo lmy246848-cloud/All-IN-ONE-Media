@@ -1,12 +1,14 @@
-# Provider format — All IN ONE Media 0.4.0
+# Provider format — All IN ONE Media 0.4.1
 
 A provider is a **data feed or media endpoint**, not an executable extension package. Add its HTTPS URL in **Extensions**, choose the category, press **Apply / Add extension**, then press **Sync**. Open a title, choose an episode or chapter when provided, and use the in-app reader, player, or website view.
 
 ## Supported source types
 
-- JSON catalogue feeds: arrays or wrapper objects containing items such as `items`, `results`, `data`, `titles`, `entries`, `chapters`, or `episodes`.
-- M3U playlists: `#EXTM3U` / `#EXTINF` followed by HTTPS stream URLs.
-- Direct HTTPS video URLs: MP4, M4V, WebM, HLS/M3U8, and DASH/MPD. A direct endpoint without a file extension can be detected using its HTTP content type.
+- JSON catalogue feeds: arrays or wrapper objects containing items such as `items`, `results`, `data`, `titles`, `entries`, `chapters`, or `episodes`. Relative stream, page, image and text URLs are resolved against the feed URL.
+- RSS 2.0 and Atom feeds: entries with HTTPS links and/or media enclosures are imported as cards.
+- Server-rendered HTML websites: the app extracts a limited set of HTTPS title links and nearby thumbnails/descriptions. JavaScript-only catalogues may still need to be browsed in the in-app browser.
+- M3U playlists: `#EXTM3U` / `#EXTINF` with absolute or relative HTTPS stream URLs, optional `tvg-logo`/`group-title` metadata, and per-entry headers expressed with supported `#EXTVLCOPT` options or `#EXTHTTP` JSON.
+- Direct HTTPS video/audio URLs: MP4, M4V, WebM, HLS/M3U8, DASH/MPD, MP3, M4A, AAC, OGG/OGA, Opus, and WAV. A direct endpoint without a file extension can be detected using its HTTP content type.
 - Website pages: HTTPS detail, reading, or streaming pages open in the app's embedded browser. Some sites may block embedded browsers or require a sign-in/captcha.
 
 ## Nested episode and chapter feeds
