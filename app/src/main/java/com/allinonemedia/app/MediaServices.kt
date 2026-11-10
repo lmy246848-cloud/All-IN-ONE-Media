@@ -49,7 +49,10 @@ data class MediaProvider(val id: String, val name: String, val category: String,
     }
 }
 
-data class MediaChapter(val id: String, val title: String, val subtitle: String = "")
+data class MediaChapter(
+    val id: String, val title: String, val subtitle: String = "",
+    val scanlationGroups: String = ""
+)
 
 class AppStore(context: Context) {
     private val prefs = context.getSharedPreferences("all_in_one_media", Context.MODE_PRIVATE)
@@ -235,9 +238,12 @@ object CatalogService {
     }
 
     private fun archiveMovies(term: String): List<MediaCard> {
-        val query = URLEncoder.encode("mediatype:movies AND title:($term)", "UTF-8")
+        val query = URLEncoder.encode(
+            "mediatype:movies AND title:($term) AND licenseurl:http*publicdomain*",
+            "UTF-8"
+        )
         val endpoint = "https://archive.org/advancedsearch.php?q=$query&fl%5B%5D=identifier" +
-            "&fl%5B%5D=title&fl%5B%5D=description&fl%5B%5D=year&rows=24&page=1&output=json"
+            "&fl%5B%5D=title&fl%5B%5D=description&fl%5B%5D=year&fl%5B%5D=licenseurl&rows=24&page=1&output=json"
         val root = JSONObject(request(endpoint))
         val docs = root.optJSONObject("response")?.optJSONArray("docs") ?: JSONArray()
         return (0 until docs.length()).mapNotNull { i ->
@@ -250,7 +256,11 @@ object CatalogService {
                 subtitle = "Internet Archive" + if (year.isNotBlank()) " • $year" else "",
                 category = "Movies", pageUrl = "https://archive.org/details/$id",
                 coverUrl = "https://archive.org/services/img/$id",
-                description = item.optString("description").replace(Regex("<[^>]*>"), " ").take(380),
+                description = (
+                    item.optString("description").replace(Regex("<[^>]*>"), " ").take(320) +
+                        if (item.optString("licenseurl").isNotBlank()) "\n\nLicence: " + item.optString("licenseurl") else
+                        "\n\nSearch filtered to Internet Archive records marked public domain."
+                    ),
                 providerName = "Internet Archive"
             )
         }
@@ -259,7 +269,7 @@ object CatalogService {
     suspend fun mangaChapters(mangaId: String): List<MediaChapter> = withContext(Dispatchers.IO) {
         val id = URLEncoder.encode(mangaId, "UTF-8")
         val endpoint = "https://api.mangadex.org/manga/$id/feed?translatedLanguage%5B%5D=en" +
-            "&order%5Bchapter%5D=asc&limit=100"
+            "&includes%5B%5D=scanlation_group&order%5Bchapter%5D=asc&limit=100"
         val root = JSONObject(request(endpoint))
         val list = root.optJSONArray("data") ?: JSONArray()
         (0 until list.length()).mapNotNull { index ->
@@ -271,7 +281,13 @@ object CatalogService {
             val volume = attr.optString("volume")
             val name = attr.optString("title")
             val label = "Chapter $number" + if (name.isNotBlank()) " — $name" else ""
-            MediaChapter(chapterId, label, if (volume.isNotBlank()) "Volume $volume" else "")
+            val relationships = entry.optJSONArray("relationships") ?: JSONArray()
+            val groupNames = (0 until relationships.length()).mapNotNull { relationshipIndex ->
+                val relation = relationships.optJSONObject(relationshipIndex) ?: return@mapNotNull null
+                if (relation.optString("type") != "scanlation_group") return@mapNotNull null
+                relation.optJSONObject("attributes")?.optString("name")?.takeIf { it.isNotBlank() }
+            }.distinct().joinToString(" / ")
+            MediaChapter(chapterId, label, if (volume.isNotBlank()) "Volume $volume" else "", groupNames)
         }
     }
 
