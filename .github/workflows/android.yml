@@ -70,10 +70,10 @@ jobs:
         if: github.ref == 'refs/heads/scratch-rebuild'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v0.3.0-build-${{ github.run_number }}
-          name: All IN ONE Media v0.3.0 (build ${{ github.run_number }})
+          tag_name: v0.3.1-build-${{ github.run_number }}
+          name: All IN ONE Media v0.3.1 (build ${{ github.run_number }})
           body: |
-            All IN ONE Media v0.3.0.
+            All IN ONE Media v0.3.1.
             Signing mode: ${{ steps.build.outputs.signing_mode }}.
             Stable update signing requires KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS and KEY_PASSWORD repository Actions secrets.
             If this is a temporary-debug build, uninstall the older APK before installing this one. Configure stable signing before future updates.
@@ -89,6 +89,6 @@ jobs:
       - name: Keep Actions artifact
         uses: actions/upload-artifact@v4
         with:
-          name: All-IN-ONE-Media-v0.3.0-APK
+          name: All-IN-ONE-Media-v0.3.1-APK
           path: dist/All-IN-ONE-Media.apk
           if-no-files-found: error
