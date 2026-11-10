@@ -39,7 +39,7 @@ The app does not bundle films, episodes, manga scans, novels, or third-party APK
 - Build branch: [scratch-rebuild](https://github.com/lmy246848-cloud/All-IN-ONE-Media/tree/scratch-rebuild)
 - APK workflow: [Android APK and Release](https://github.com/lmy246848-cloud/All-IN-ONE-Media/actions/workflows/android.yml)
 
-The GitHub Actions workflow produces an APK release. Without a persistent release keystore configured through the repository Actions secrets, the workflow uses a temporary CI debug key. Such APKs are not guaranteed to be update-compatible with later builds. Keep a copy of important local app data before changing installations.
+The GitHub Actions workflow produces an APK and verifies its ZIP structure, package metadata, and signature before publishing it. This 0.4.1 build uses a new application ID (`com.allinonemedia.app.v041`) so it can install alongside earlier builds despite the unrecoverable temporary CI signing key. Android treats it as a separate app, so local library/provider data from 0.4.0 is not copied automatically. Without a persistent keystore configured through Actions secrets, later CI builds will also need separate install identities or a reinstall after a signing-key change.
 
 ## API references
 
