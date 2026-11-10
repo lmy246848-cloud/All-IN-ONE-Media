@@ -565,6 +565,7 @@ object CatalogService {
             "playback_url", "videoUrl", "video_url", "stream", "file", "src", "hls", "mp4"
         )
         val genericUrl = field("url", "link", "sourceUrl", "source_url")
+        val mimeType = mimeTypeFromHint(field("mimeType", "mime_type", "streamMimeType", "stream_mime_type", "format"))
         val stream = when {
             rawUrl.isNotBlank() && isHttpsUrl(rawUrl) -> rawUrl
             genericUrl.isNotBlank() && isHttpsUrl(genericUrl) && (isPlayable(genericUrl) || mimeType.isNotBlank()) -> genericUrl
@@ -580,7 +581,6 @@ object CatalogService {
             ?: firstValue(metadata, "pages", "pageUrls", "page_urls", "images")
         val content = field("content", "text", "chapterText", "chapter_text", "body")
         val textUrl = field("textUrl", "text_url", "readerUrl", "reader_url", "textFile", "downloadUrl")
-        val mimeType = mimeTypeFromHint(field("mimeType", "mime_type", "streamMimeType", "stream_mime_type", "format"))
         val title = field("title", "name", "label", "mangaTitle", "animeTitle", "bookTitle")
         val itemId = field("id", "slug", "key").ifBlank { provider.id + "-" + index }
         val headersValue = firstValue(item, "headers", "requestHeaders", "request_headers")
