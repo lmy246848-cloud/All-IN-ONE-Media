@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import '../../core/ui/settings_widgets.dart';
+import '../search/browse_sources_screen.dart';
 
 import '../../core/app_mode.dart';
 import '../../core/di/injector.dart';
@@ -184,8 +185,41 @@ class _HubPhoneView extends StatelessWidget {
             activeName: activeName,
             totalUpdates: totalUpdates,
           ),
+          const SizedBox(height: 18),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: AppColors.hairline),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Ready to watch or read?',
+                  style: AppText.headline.copyWith(color: AppColors.textPrimary),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  total == 0
+                      ? 'Add a source below. Once it is installed, browse its catalogue here and open a title to play or read it.'
+                      : 'Your sources are installed. Browse their catalogues, choose a title, then open an episode or chapter to play or read inside the app.',
+                  style: AppText.caption.copyWith(color: AppColors.textSecondary),
+                ),
+                const SizedBox(height: 12),
+                FilledButton.icon(
+                  onPressed: total == 0
+                      ? null
+                      : () => open(const BrowseSourcesScreen()),
+                  icon: const Icon(Icons.explore_rounded),
+                  label: const Text('Browse installed sources'),
+                ),
+              ],
+            ),
+          ),
           const SizedBox(height: 24),
-          if (mangayomi != null) ...[
+          if (mangayomi != null) [
             const _SectionLabel('ALL'),
             const SizedBox(height: 12),
             _EcoRow(
