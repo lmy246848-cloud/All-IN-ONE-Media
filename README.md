@@ -5,9 +5,9 @@ All IN ONE Media is an Android media hub for searching titles, adding compatible
 ## Version 0.4.0
 
 - Anime and donghua title discovery through AniList metadata.
-- Manga and manhwa search through MangaDex, including English chapter lists and a continuous vertical image reader.
+- Manga and manhwa search through MangaDex, including English chapter lists, scanlation-group attribution, and a continuous vertical image reader.
 - Public-domain book discovery through Project Gutenberg / Gutendex, with an in-app text reader.
-- Movie search through Internet Archive metadata, with MP4 resolution and in-app playback when an MP4 derivative exists.
+- Public-domain movie search through Internet Archive licence metadata, with MP4 resolution and in-app playback when an MP4 derivative exists.
 - TV-series metadata search through TMDB after you supply a TMDB API key. TMDB is metadata only; it does not supply video.
 - Manual HTTPS providers that return JSON catalogues, nested episodes/chapters, M3U playlists, or direct video streams.
 - Nested episode and chapter selection in title details.
