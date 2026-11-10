@@ -207,6 +207,7 @@ fun AllInOneApp() {
                 activeReader = MediaCard(
                     id = "mangadex-error-" + chapter.id,
                     title = chapter.title,
+                    subtitle = "Chapter unavailable",
                     category = manga.category,
                     providerName = "MangaDex",
                     description = "Could not load this chapter: " + (e.message ?: "network error")
