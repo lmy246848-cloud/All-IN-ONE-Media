@@ -671,7 +671,7 @@ object CatalogService {
         return key.matches(Regex("[A-Za-z0-9-]{1,64}")) &&
             key.lowercase() !in blocked &&
             value.length <= 4096 &&
-            !value.contains("\\r") && !value.contains("\\n")
+            !value.contains("\r") && !value.contains("\n")
     }
 
     private fun isHttpsUrl(value: String): Boolean =
