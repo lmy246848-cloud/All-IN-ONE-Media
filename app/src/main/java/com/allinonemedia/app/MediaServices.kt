@@ -12,18 +12,22 @@ import java.net.URLEncoder
 data class MediaCard(
     val id: String, val title: String, val subtitle: String, val category: String,
     val pageUrl: String = "", val streamUrl: String = "", val coverUrl: String = "",
-    val description: String = "", val providerName: String = ""
+    val description: String = "", val providerName: String = "",
+    val pages: List<String> = emptyList(), val textContent: String = ""
 ) {
     fun toJson() = JSONObject().put("id", id).put("title", title).put("subtitle", subtitle)
         .put("category", category).put("pageUrl", pageUrl).put("streamUrl", streamUrl)
         .put("coverUrl", coverUrl).put("description", description).put("providerName", providerName)
+        .put("pages", JSONArray(pages)).put("content", textContent)
 
     companion object {
         fun fromJson(o: JSONObject) = MediaCard(
             o.optString("id", o.optString("title")), o.optString("title", "Untitled"),
             o.optString("subtitle"), o.optString("category", "Anime"), o.optString("pageUrl"),
             o.optString("streamUrl"), o.optString("coverUrl"), o.optString("description"),
-            o.optString("providerName")
+            o.optString("providerName"),
+            o.optJSONArray("pages")?.let { a -> (0 until a.length()).map { i -> a.optString(i) } } ?: emptyList(),
+            o.optString("content")
         )
     }
 }
@@ -189,7 +193,9 @@ object CatalogService {
                 pageUrl = o.optString("pageUrl", o.optString("link")),
                 streamUrl = stream.takeIf { isPlayable(it) } ?: "",
                 coverUrl = o.optString("coverUrl", o.optString("cover", o.optString("poster"))),
-                description = o.optString("description"), providerName = provider.name
+                description = o.optString("description"), providerName = provider.name,
+                pages = o.optJSONArray("pages")?.let { a -> (0 until a.length()).map { i -> a.optString(i) } } ?: emptyList(),
+                textContent = o.optString("content")
             )
         }
     }
