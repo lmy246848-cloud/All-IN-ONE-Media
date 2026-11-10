@@ -10,11 +10,11 @@ android {
     defaultConfig {
         // Separate install identity: the older build used an unrecoverable temporary
         // CI debug key, so Android cannot accept this APK as an in-place update.
-        applicationId = "com.allinonemedia.app.fresh"
+        applicationId = "com.allinonemedia.app.v041"
         minSdk = 26
         targetSdk = 35
-        versionCode = 7
-        versionName = "0.4.0"
+        versionCode = 8
+        versionName = "0.4.1"
     }
     signingConfigs {
         create("release") {
@@ -59,5 +59,6 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer-hls:1.5.1")
     implementation("androidx.media3:media3-exoplayer-dash:1.5.1")
     implementation("androidx.media3:media3-ui:1.5.1")
+    implementation("org.jsoup:jsoup:1.18.3")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
