@@ -10,6 +10,30 @@ def replace_once(path, old, new):
 
 replace_once("pubspec.yaml", "version: 2.3.5+23637", "version: 1.0.0+1")
 replace_once("lib/core/app_config.dart", "const String kAppName = 'Zangetsu';", "const String kAppName = 'All IN ONE Media';")
+
+# The fork has no permission to use the upstream user's cloud backend.
+# Keep source catalogue/playback and local library features; disable account sync/reporting.
+replace_once("lib/core/environment.dart",
+             "static const String appwriteProjectId = '6a1ed44f0029b50bccde';",
+             "static const String appwriteProjectId = '';")
+replace_once("lib/core/environment.dart",
+             "defaultValue: 'https://eogwzrlfoercfwcfwlmv.supabase.co',",
+             "defaultValue: '',")
+replace_once("lib/core/environment.dart",
+             "        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVvZ3d6cmxmb2VyY2Z3Y2Z3bG12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQzNjgzODIsImV4cCI6MjA5OTk0NDM4Mn0.qr-nHnB9vb7BodP55XJ9-6Rwp__eOGCS6txhLiuWVZw',",
+             "        '',")
+replace_once("lib/core/environment.dart",
+             "defaultValue: 'https://sync.zangetsu.online',",
+             "defaultValue: '',")
+replace_once("lib/core/environment.dart",
+             "static const String simklClientId =\n      '8b847b09206ccdb0b3de4cc1293d6dd7d355821f5c179c57315da8ba9030eb53';",
+             "static const String simklClientId = '';")
+replace_once("lib/core/environment.dart",
+             "static const String simklClientSecret =\n      '34ba8e5ac7c8a5c27926dfdf78205e5b913de9928361cb5a243558239298c96d';",
+             "static const String simklClientSecret = '';")
+replace_once("lib/core/app_config.dart",
+             "const String kLogIntakeUrl = 'https://zangetsu-logs.log-intake.workers.dev';",
+             "const String kLogIntakeUrl = '';")
 replace_once("android/app/build.gradle.kts", 'applicationId = "com.spyou.watch_app"', 'applicationId = "com.allinonemedia.entertainment"')
 
 # Disable the optional proprietary Discord native SDK, which is not in the repository.
@@ -60,7 +84,7 @@ class DiscordPresenceBridge(activity: Activity, messenger: BinaryMessenger) {
 p = R / "android/app/src/main/AndroidManifest.xml"
 m = p.read_text(encoding="utf-8")
 m = m.replace('android:label="Zangetsu"', 'android:label="All IN ONE Media"')
-m = m.replace('android:scheme="zangetsu"', 'android:scheme="allinonemedia"')
+# Keep zangetsu:// registered tracker callback URIs intact for AniList/MAL.
 p.write_text(m, encoding="utf-8")
 
 # The saved language preference remains editable; a fresh install starts in English.
@@ -90,6 +114,10 @@ The broader integration of Hikari Stremio/.hiki and Vega providers remains futur
 Retain upstream LICENSE, NOTICE and third-party notices. Base source is GPL-3.0.
 """
 (R / "README-ALL-IN-ONE-MEDIA.md").write_text(readme, encoding="utf-8")
+replace_once("lib/main.dart", "      var supabaseOk = false;\n      try {\n        // initialize() sets the singleton's client synchronously and only\n        // then awaits session restore — a timeout still leaves a usable\n        // client behind (registrations below dereference it), so even a\n        // probed-offline boot runs it with a short fuse instead of skipping.\n        await Supabase.initialize(\n          url: Environment.supabaseUrl,\n          anonKey: Environment.supabaseAnonKey,\n          // TV auth uses QR pairing, not OAuth redirect deep links.\n          authOptions: FlutterAuthClientOptions(detectSessionInUri: !appleTv),\n        ).timeout(Duration(seconds: bootOffline ? 2 : 8));\n        supabaseOk = true;\n      } catch (e, st) {\n        AppLogger.instance.logError(e, st);\n      }\n      // Boot init failed (dead/slow network) → keep retrying in the background so\n      // login + cloud sync self-heal when the network returns, no restart needed.\n      if (!supabaseOk) unawaited(_retrySupabaseInit());", "      var supabaseOk = false;\n      // This fork ships without the upstream account backend. Skip Supabase\n      // entirely unless the fork owner configures both of their own values.\n      if (Environment.supabaseUrl.isNotEmpty &&\n          Environment.supabaseAnonKey.isNotEmpty) {\n        try {\n          await Supabase.initialize(\n            url: Environment.supabaseUrl,\n            anonKey: Environment.supabaseAnonKey,\n            authOptions: FlutterAuthClientOptions(detectSessionInUri: !appleTv),\n          ).timeout(Duration(seconds: bootOffline ? 2 : 8));\n          supabaseOk = true;\n        } catch (e, st) {\n          AppLogger.instance.logError(e, st);\n        }\n        if (!supabaseOk) unawaited(_retrySupabaseInit());\n      }")
+replace_once("lib/main.dart",
+             "Future<void> _retrySupabaseInit() async {",
+             "Future<void> _retrySupabaseInit() async {\n  if (Environment.supabaseUrl.isEmpty || Environment.supabaseAnonKey.isEmpty) return;")
 print("Prepared All IN ONE Media branding, English-first language, custom icon and Android package identity.")
 
 
@@ -97,9 +125,7 @@ print("Prepared All IN ONE Media branding, English-first language, custom icon a
 replace_once("lib/core/ui/nav_prefs.dart",
              "enum DockTab {\n  home('Home'),",
              "enum DockTab {\n  home('Home'),\n  shortDrama('Shorts'),")
-replace_once("lib/core/ui/nav_prefs.dart",
-             "  static const List<DockTab> defaultTabs = [\n    DockTab.home,\n    DockTab.myList,\n    DockTab.sources,\n    DockTab.profile,\n  ];",
-             "  static const List<DockTab> defaultTabs = [\n    DockTab.home,\n    DockTab.shortDrama,\n    DockTab.myList,\n    DockTab.profile,\n  ];")
+# Keep the Sources tab in the default dock. Shorts remains optional in Navigation settings.
 replace_once("lib/l10n/ui_strings.dart",
              "        DockTab.home => context.l10n.home,",
              "        DockTab.home => context.l10n.home,\n        DockTab.shortDrama => 'Shorts',")
