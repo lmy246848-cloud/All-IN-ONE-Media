@@ -1,7 +1,5 @@
 name: Android APK
 on:
-  push:
-    branches: [scratch-rebuild]
   workflow_dispatch:
 permissions:
   contents: read
