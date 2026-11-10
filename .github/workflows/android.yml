@@ -33,25 +33,47 @@ jobs:
       - name: Install Android SDK 35
         run: sdkmanager --install "platforms;android-35" "build-tools;35.0.0"
 
-      - name: Build debug APK
-        run: gradle --no-daemon :app:assembleDebug
+      - name: Build APK
+        id: build
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/all-in-one-media-release.jks"
+            echo "KEYSTORE_PATH=$RUNNER_TEMP/all-in-one-media-release.jks" >> "$GITHUB_ENV"
+            gradle --no-daemon :app:assembleRelease
+            echo "apk_path=app/build/outputs/apk/release/app-release.apk" >> "$GITHUB_OUTPUT"
+            echo "signing_mode=stable-release" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Stable signing secrets are not configured. This fallback APK uses the runner's temporary debug key and will not be update-compatible with future CI builds."
+            gradle --no-daemon :app:assembleDebug
+            echo "apk_path=app/build/outputs/apk/debug/app-debug.apk" >> "$GITHUB_OUTPUT"
+            echo "signing_mode=temporary-debug" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Prepare direct APK
+        env:
+          APK_PATH: ${{ steps.build.outputs.apk_path }}
         run: |
-          cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/All-IN-ONE-Media.apk
-          sha256sum app/build/outputs/apk/debug/All-IN-ONE-Media.apk
+          mkdir -p dist
+          cp "$APK_PATH" dist/All-IN-ONE-Media.apk
+          sha256sum dist/All-IN-ONE-Media.apk
 
       - name: Publish downloadable APK release
         if: github.ref == 'refs/heads/scratch-rebuild'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v0.2.0-build-${{ github.run_number }}
-          name: All IN ONE Media v0.2.0 (build ${{ github.run_number }})
+          tag_name: v0.3.0-build-${{ github.run_number }}
+          name: All IN ONE Media v0.3.0 (build ${{ github.run_number }})
           body: |
-            All IN ONE Media Android build.
-            This is a debug-signed test APK. Install on Android 8.0 or newer.
-            Review the project README and provider format before adding sources.
-          files: app/build/outputs/apk/debug/All-IN-ONE-Media.apk
+            All IN ONE Media v0.3.0.
+            Signing mode: ${{ steps.build.outputs.signing_mode }}.
+            Stable update signing requires KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS and KEY_PASSWORD repository Actions secrets.
+            If this is a temporary-debug build, uninstall the older APK before installing this one. Configure stable signing before future updates.
+          files: dist/All-IN-ONE-Media.apk
           make_latest: true
           draft: false
           prerelease: false
@@ -63,6 +85,6 @@ jobs:
       - name: Keep Actions artifact
         uses: actions/upload-artifact@v4
         with:
-          name: All-IN-ONE-Media-debug-APK
-          path: app/build/outputs/apk/debug/All-IN-ONE-Media.apk
+          name: All-IN-ONE-Media-v0.3.0-APK
+          path: dist/All-IN-ONE-Media.apk
           if-no-files-found: error
