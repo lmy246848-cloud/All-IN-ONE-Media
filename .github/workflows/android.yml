@@ -7,6 +7,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: all-in-one-media-android-build
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
