@@ -1241,7 +1241,6 @@ private fun InAppBrowserDialog(title: String, url: String, onDismiss: () -> Unit
     }
 }
 
-@Composable
 @OptIn(androidx.media3.common.util.UnstableApi::class)
 @Composable
 private fun VideoPlayerDialog(item: MediaCard, onDismiss: () -> Unit) {
