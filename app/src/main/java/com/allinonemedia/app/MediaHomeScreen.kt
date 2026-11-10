@@ -5,6 +5,10 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Environment
+import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.LinearEasing
@@ -113,6 +117,8 @@ fun AllInOneApp() {
     var syncMessage by remember { mutableStateOf("") }
     var activeVideo by remember { mutableStateOf<MediaCard?>(null) }
     var activeReader by remember { mutableStateOf<MediaCard?>(null) }
+    var activeManga by remember { mutableStateOf<MediaCard?>(null) }
+    var activeBrowser by remember { mutableStateOf<Pair<String, String>?>(null) }
 
     LaunchedEffect(Unit) { delay(1250); showSplash = false }
 
@@ -132,8 +138,69 @@ fun AllInOneApp() {
         try { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } catch (_: Exception) { }
     }
 
+    fun openInApp(url: String, title: String) {
+        if (url.startsWith("https://", true)) activeBrowser = title to url
+    }
+
     fun openItem(item: MediaCard) {
-        if (item.pages.isNotEmpty() || item.textContent.isNotBlank() || item.pageUrl.isNotBlank()) activeReader = item
+        when {
+            item.id.startsWith("mangadex-") -> activeManga = item
+            item.id.startsWith("gutenberg-") && item.textUrl.isNotBlank() -> scope.launch {
+                activeReader = item.copy(textContent = "Loading book text…")
+                try {
+                    val text = CatalogService.fetchPlainText(item.textUrl)
+                    activeReader = item.copy(textContent = text, description = item.description)
+                } catch (e: Exception) {
+                    activeReader = item.copy(description = (item.description + "\n\nCould not load the book text: " + (e.message ?: "network error")).trim())
+                }
+            }
+            item.id.startsWith("archive-") -> scope.launch {
+                activeReader = item.copy(description = "Finding a playable file in Internet Archive…")
+                try {
+                    val stream = CatalogService.archiveStream(item.id.removePrefix("archive-"))
+                    activeReader = null
+                    activeVideo = item.copy(streamUrl = stream, subtitle = "Internet Archive • ready to play")
+                } catch (e: Exception) {
+                    activeReader = item.copy(description = (item.description + "\n\nCould not prepare playback: " + (e.message ?: "no MP4 stream")).trim())
+                }
+            }
+            else -> activeReader = item
+        }
+    }
+
+    fun openChild(item: MediaCard) {
+        when {
+            item.streamUrl.isNotBlank() -> activeVideo = item
+            item.id.startsWith("mangadex-") || item.textUrl.isNotBlank() || item.pages.isNotEmpty() || item.textContent.isNotBlank() -> openItem(item)
+            item.pageUrl.startsWith("https://", true) -> openInApp(item.pageUrl, item.title)
+            else -> activeReader = item
+        }
+    }
+
+    fun readMangaChapter(manga: MediaCard, chapter: MediaChapter) {
+        activeManga = null
+        scope.launch {
+            try {
+                val pages = CatalogService.mangaPages(chapter.id)
+                activeReader = MediaCard(
+                    id = "mangadex-chapter-" + chapter.id,
+                    title = manga.title + " — " + chapter.title,
+                    subtitle = chapter.subtitle,
+                    category = manga.category,
+                    pages = pages,
+                    providerName = "MangaDex",
+                    description = "Provided by MangaDex. Please credit the manga creators and scanlation group."
+                )
+            } catch (e: Exception) {
+                activeReader = MediaCard(
+                    id = "mangadex-error-" + chapter.id,
+                    title = chapter.title,
+                    category = manga.category,
+                    providerName = "MangaDex",
+                    description = "Could not load this chapter: " + (e.message ?: "network error")
+                )
+            }
+        }
     }
 
     fun syncProvider(provider: MediaProvider) {
@@ -292,8 +359,25 @@ fun AllInOneApp() {
             }
         }
     }
+    activeManga?.let { manga ->
+        MangaDetailsDialog(
+            item = manga,
+            onDismiss = { activeManga = null },
+            onReadChapter = { chapter -> readMangaChapter(manga, chapter) }
+        )
+    }
     activeVideo?.let { item -> VideoPlayerDialog(item = item, onDismiss = { activeVideo = null }) }
-    activeReader?.let { item -> ReaderDialog(item = item, onDismiss = { activeReader = null }, onOpenSource = { openExternal(it) }) }
+    activeReader?.let { item ->
+        ReaderDialog(
+            item = item,
+            onDismiss = { activeReader = null },
+            onOpenSource = { openInApp(it, item.title) },
+            onOpenChild = { openChild(it) }
+        )
+    }
+    activeBrowser?.let { browser ->
+        InAppBrowserDialog(title = browser.first, url = browser.second, onDismiss = { activeBrowser = null })
+    }
 }
 
 @Composable
@@ -619,8 +703,8 @@ private fun MediaCardRow(
                     if (item.streamUrl.isNotBlank()) {
                         IconButton(onClick = { onPlay(item) }) { Icon(Icons.Filled.PlayArrow, contentDescription = "Play", tint = Purple) }
                     } else {
-                        IconButton(onClick = { onOpen(item) }, enabled = item.pageUrl.isNotBlank() || item.pages.isNotEmpty() || item.textContent.isNotBlank()) {
-                            Icon(Icons.Filled.Explore, contentDescription = "Open details", tint = Purple)
+                        IconButton(onClick = { onOpen(item) }) {
+                            Icon(Icons.Filled.Explore, contentDescription = "Open details, chapters or source page", tint = Purple)
                         }
                     }
                     if (CatalogService.isDownloadable(item.streamUrl)) {
@@ -864,7 +948,10 @@ private fun SettingsScreen(
 
 
 @Composable
-private fun ReaderDialog(item: MediaCard, onDismiss: () -> Unit, onOpenSource: (String) -> Unit) {
+private fun ReaderDialog(
+    item: MediaCard, onDismiss: () -> Unit, onOpenSource: (String) -> Unit,
+    onOpenChild: (MediaCard) -> Unit
+) {
     var pageIndex by remember(item.id) { mutableIntStateOf(0) }
     var fontSize by remember(item.id) { mutableFloatStateOf(17f) }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
@@ -877,11 +964,22 @@ private fun ReaderDialog(item: MediaCard, onDismiss: () -> Unit, onOpenSource: (
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(item.title, color = Color.White, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(if (item.pages.isNotEmpty()) "Chapter pages" else "Reading view", color = SoftText, fontSize = 10.sp)
+                        Text(
+                            when {
+                                item.pages.isNotEmpty() -> "Chapter pages"
+                                item.providerName == "Project Gutenberg" -> "Public-domain book text"
+                                item.textContent.isNotBlank() -> "Reading view"
+                                else -> "Title details"
+                            },
+                            color = SoftText, fontSize = 10.sp
+                        )
                     }
                     TextButton(onClick = onDismiss) { Text("Close", color = Purple) }
                 }
                 if (item.pages.isNotEmpty()) {
+                    if (item.providerName == "MangaDex") {
+                        Text("MangaDex • Please credit the original creators and scanlation group.", color = SoftText, fontSize = 10.sp)
+                    }
                     AsyncImage(
                         model = item.pages[pageIndex.coerceIn(item.pages.indices)],
                         contentDescription = "Page " + (pageIndex + 1),
@@ -922,18 +1020,186 @@ private fun ReaderDialog(item: MediaCard, onDismiss: () -> Unit, onOpenSource: (
                             AsyncImage(model = item.coverUrl, contentDescription = item.title, contentScale = ContentScale.Fit,
                                 modifier = Modifier.fillMaxWidth().heightIn(max = 280.dp).clip(RoundedCornerShape(12.dp)))
                         }
-                        Text(item.description.ifBlank { "This source has provided catalogue information but has not supplied readable chapters or full text for this title." },
+                        Text(item.description.ifBlank { "This source has provided catalogue information but has not supplied readable chapters or a direct stream for this title." },
                             color = Color(0xFFF2ECFA), fontSize = 14.sp, lineHeight = 22.sp)
-                        Text("Reading or playback availability depends on the installed source. If the source provides chapter pages, novel text, or a playable stream, those open directly in All IN ONE Media.", color = SoftText, fontSize = 11.sp)
+                        if (item.childItems.isNotEmpty()) {
+                            Spacer(Modifier.height(8.dp))
+                            Text("Episodes / chapters (" + item.childItems.size + ")", color = Purple, fontWeight = FontWeight.Bold)
+                            item.childItems.forEach { child ->
+                                Card(
+                                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp).clickable { onOpenChild(child) },
+                                    colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.07f)),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(if (child.streamUrl.isNotBlank()) Icons.Filled.PlayArrow else Icons.Filled.MenuBook, contentDescription = null, tint = Aqua)
+                                        Spacer(Modifier.width(9.dp))
+                                        Column(Modifier.weight(1f)) {
+                                            Text(child.title, color = Color.White, fontWeight = FontWeight.SemiBold)
+                                            if (child.subtitle.isNotBlank()) Text(child.subtitle, color = SoftText, fontSize = 10.sp)
+                                        }
+                                        Icon(Icons.Filled.Explore, contentDescription = "Open", tint = Purple)
+                                    }
+                                }
+                            }
+                        }
+                        Text("Direct chapter pages, text and supported video streams open in the app. Website-only sources open in the in-app browser. A catalogue entry by itself does not include a playable episode.", color = SoftText, fontSize = 11.sp)
                         if (item.pageUrl.isNotBlank()) {
                             Button(onClick = { onOpenSource(item.pageUrl) }, modifier = Modifier.fillMaxWidth()) {
                                 Icon(Icons.Filled.Explore, contentDescription = null)
                                 Spacer(Modifier.width(7.dp))
-                                Text("Open source page")
+                                Text("Open source inside app")
+                            }
+                        }
+                        if (item.providerName == "MangaDex") {
+                            Text("Manga powered by MangaDex • Credit creators and scanlation groups.", color = SoftText, fontSize = 10.sp)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MangaDetailsDialog(
+    item: MediaCard, onDismiss: () -> Unit, onReadChapter: (MediaChapter) -> Unit
+) {
+    var chapters by remember(item.id) { mutableStateOf<List<MediaChapter>>(emptyList()) }
+    var loading by remember(item.id) { mutableStateOf(true) }
+    var error by remember(item.id) { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(item.id) {
+        loading = true
+        error = ""
+        try {
+            chapters = CatalogService.mangaChapters(item.id.removePrefix("mangadex-"))
+            if (chapters.isEmpty()) error = "No English chapters are currently listed for this title."
+        } catch (e: Exception) {
+            error = e.message ?: "Could not load chapter list."
+        } finally {
+            loading = false
+        }
+    }
+
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(
+            modifier = Modifier.fillMaxWidth().fillMaxHeight(0.91f).padding(9.dp),
+            shape = RoundedCornerShape(22.dp), color = Color(0xFF100D19)
+        ) {
+            Column(Modifier.fillMaxSize().padding(15.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(item.title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                        Text("MangaDex • English chapters", color = SoftText, fontSize = 11.sp)
+                    }
+                    TextButton(onClick = onDismiss) { Text("Close", color = Purple) }
+                }
+                if (item.description.isNotBlank()) {
+                    Text(item.description.take(420), color = SoftText, fontSize = 11.sp, maxLines = 5, overflow = TextOverflow.Ellipsis)
+                }
+                Spacer(Modifier.height(10.dp))
+                when {
+                    loading -> Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            CircularProgressIndicator(color = Purple)
+                            Text("Loading chapter list…", color = SoftText, fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp))
+                        }
+                    }
+                    error.isNotBlank() -> Column(Modifier.fillMaxWidth().weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(error, color = Pink, fontSize = 12.sp)
+                        Text("MangaDex only lists chapters supplied by its contributors. Try another title or check the source website.", color = SoftText, fontSize = 11.sp)
+                        Button(onClick = {
+                            scope.launch {
+                                loading = true
+                                error = ""
+                                try {
+                                    chapters = CatalogService.mangaChapters(item.id.removePrefix("mangadex-"))
+                                    if (chapters.isEmpty()) error = "No English chapters are currently listed for this title."
+                                } catch (e: Exception) { error = e.message ?: "Could not load chapter list." }
+                                finally { loading = false }
+                            }
+                        }) { Text("Retry") }
+                    }
+                    else -> LazyColumn(
+                        Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(7.dp),
+                        contentPadding = PaddingValues(vertical = 5.dp)
+                    ) {
+                        items(chapters, key = { it.id }) { chapter ->
+                            Card(
+                                modifier = Modifier.fillMaxWidth().clickable { onReadChapter(chapter) },
+                                colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.065f)),
+                                shape = RoundedCornerShape(13.dp)
+                            ) {
+                                Row(Modifier.fillMaxWidth().padding(13.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Filled.MenuBook, contentDescription = null, tint = Aqua)
+                                    Spacer(Modifier.width(10.dp))
+                                    Column(Modifier.weight(1f)) {
+                                        Text(chapter.title, color = Color.White, fontWeight = FontWeight.SemiBold)
+                                        if (chapter.subtitle.isNotBlank()) Text(chapter.subtitle, color = SoftText, fontSize = 10.sp)
+                                    }
+                                    Icon(Icons.Filled.Explore, contentDescription = "Read chapter", tint = Purple)
+                                }
                             }
                         }
                     }
                 }
+                Text("MangaDex is the source. Please credit authors and scanlation groups.", color = SoftText, fontSize = 10.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun InAppBrowserDialog(title: String, url: String, onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val webView = remember(url) {
+        WebView(context).apply {
+            settings.javaScriptEnabled = true
+            settings.domStorageEnabled = true
+            settings.loadsImagesAutomatically = true
+            settings.javaScriptCanOpenWindowsAutomatically = false
+            settings.setSupportMultipleWindows(false)
+            settings.allowFileAccess = false
+            settings.allowContentAccess = false
+            settings.mediaPlaybackRequiresUserGesture = true
+            settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
+            settings.safeBrowsingEnabled = true
+            webViewClient = object : WebViewClient() {
+                override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                    val target = request?.url ?: return true
+                    return !target.scheme.equals("https", true)
+                }
+            }
+            webChromeClient = WebChromeClient()
+            loadUrl(url)
+        }
+    }
+    DisposableEffect(webView) {
+        onDispose {
+            webView.stopLoading()
+            webView.loadUrl("about:blank")
+            webView.destroy()
+        }
+    }
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(
+            modifier = Modifier.fillMaxWidth().fillMaxHeight(0.96f).padding(7.dp),
+            shape = RoundedCornerShape(18.dp), color = Color(0xFF100D19)
+        ) {
+            Column(Modifier.fillMaxSize().padding(8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(title, color = Color.White, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(url, color = SoftText, fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    TextButton(onClick = {
+                        if (webView.canGoBack()) webView.goBack() else onDismiss()
+                    }) { Text("Back", color = Aqua) }
+                    TextButton(onClick = onDismiss) { Text("Close", color = Purple) }
+                }
+                AndroidView(factory = { webView }, modifier = Modifier.fillMaxSize())
             }
         }
     }
