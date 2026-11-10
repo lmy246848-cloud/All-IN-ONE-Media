@@ -307,8 +307,8 @@ object CatalogService {
                 URL(raw).path.substringAfterLast('/').substringBefore('?').ifBlank { URL(raw).host }
             }.getOrDefault("")
             return MediaCard(
-                id = "\${provider.id}-$index",
-                title = if (isHttpsPage) pathTitle.ifBlank { "Title \${index + 1}" } else raw,
+                id = provider.id + "-" + index,
+                title = if (isHttpsPage) pathTitle.ifBlank { "Title " + (index + 1) } else raw,
                 subtitle = if (playable.isNotBlank()) "Direct media source" else provider.name,
                 category = provider.category,
                 pageUrl = if (isHttpsPage && playable.isBlank()) raw else "",
@@ -340,11 +340,11 @@ object CatalogService {
             ?: firstValue(metadata, "pages", "pageUrls", "page_urls", "images")
         val content = field("content", "text", "chapterText", "chapter_text", "body")
         val title = field("title", "name", "label", "mangaTitle", "animeTitle", "bookTitle")
-        val itemId = field("id", "slug", "key").ifBlank { "\${provider.id}-$index" }
+        val itemId = field("id", "slug", "key").ifBlank { provider.id + "-" + index }
 
         return MediaCard(
             id = itemId,
-            title = title.ifBlank { "Untitled \${index + 1}" },
+            title = title.ifBlank { "Untitled " + (index + 1) },
             subtitle = field("subtitle", "description", "chapter", "episode", "author"),
             category = field("category", "type", "contentType", "content_type", "mediaType")
                 .ifBlank { provider.category },

@@ -74,7 +74,7 @@ jobs:
           name: All IN ONE Media v0.3.3 (build ${{ github.run_number }})
           body: |
             All IN ONE Media v0.3.3.
-Provider parsing now accepts nested and JSON-encoded feeds, string entries and string page lists. The interface uses translucent glass panels and ambient gradient lighting.
+            Provider parsing now accepts nested and JSON-encoded feeds, string entries and string page lists. The interface uses translucent glass panels and ambient gradient lighting.
             This build uses a fresh application ID so it can install alongside older builds signed with an unrecoverable temporary CI key.
             Signing mode: ${{ steps.build.outputs.signing_mode }}.
             Configure KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS and KEY_PASSWORD repository Actions secrets to make future updates install over this version.
