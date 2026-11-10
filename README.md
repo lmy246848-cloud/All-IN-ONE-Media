@@ -2,17 +2,17 @@
 
 All IN ONE Media is an Android media hub for searching titles, adding compatible sources, opening episodes and chapters, reading text and image pages, and playing supported video streams.
 
-## Version 0.4.0
+## Version 0.4.1
 
 - Anime and donghua title discovery through AniList metadata.
 - Manga and manhwa search through MangaDex, including English chapter lists, scanlation-group attribution, and a continuous vertical image reader.
 - Public-domain book discovery through Project Gutenberg / Gutendex, with an in-app text reader.
 - Public-domain movie search through Internet Archive licence metadata, with MP4 resolution and in-app playback when an MP4 derivative exists.
 - TV-series metadata search through TMDB after you supply a TMDB API key. TMDB is metadata only; it does not supply video.
-- Manual HTTPS providers that return JSON catalogues, nested episodes/chapters, M3U playlists, or direct video streams, including per-stream MIME types and optional HTTP request headers for the provider and its stream items.
+- Manual HTTPS providers that return JSON catalogues, nested episodes/chapters, RSS/Atom feeds, M3U playlists with per-stream headers, basic server-rendered HTML catalogues, or direct video/audio streams. Relative URLs are resolved against the feed URL.
 - Nested episode and chapter selection in title details.
 - In-app HTTPS browser for source pages that don't expose direct media URLs.
-- Media3 playback for MP4, WebM, M4V, HLS/M3U8 and DASH/MPD, with MIME-type support for signed stream URLs.
+- Media3 playback for MP4, WebM, M4V, HLS/M3U8, DASH/MPD and common audio formats, with MIME-type and custom request-header support.
 - Local library, downloads for supported direct files, liquid-glass-inspired interface, and dark/light themes.
 
 ## Quick start
@@ -33,8 +33,8 @@ The app does not bundle films, episodes, manga scans, novels, or third-party APK
 
 ## Build
 
-- Android application ID: `com.allinonemedia.app.fresh`
-- Version: `0.4.0` (versionCode 7)
+- Android application ID: `com.allinonemedia.app.v041`
+- Version: `0.4.1` (versionCode 8)
 - Minimum Android version: Android 8.0 (API 26)
 - Build branch: [scratch-rebuild](https://github.com/lmy246848-cloud/All-IN-ONE-Media/tree/scratch-rebuild)
 - APK workflow: [Android APK and Release](https://github.com/lmy246848-cloud/All-IN-ONE-Media/actions/workflows/android.yml)
