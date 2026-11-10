@@ -443,7 +443,10 @@ private fun DiscoverScreen(
         if (loading) {
             Column { repeat(3) { LoadingCard() } }
         } else if (category == "Shorts") {
-            val shorts = providerItems.filter { it.category.equals("Shorts", true) || it.category.equals("All", true) }
+            val shorts = providerItems.filter {
+                (it.category.equals("Shorts", true) || it.category.equals("All", true)) &&
+                    (term.isBlank() || it.title.contains(term, true) || it.description.contains(term, true))
+            }
             if (shorts.isEmpty()) {
                 Text("Your short-drama feed is ready for a source. Add a Shorts JSON feed, M3U playlist, or direct MP4/HLS link in Extensions, then tap Sync.", color = SoftText, fontSize = 12.sp)
             } else {
@@ -455,9 +458,10 @@ private fun DiscoverScreen(
             }
         } else {
             val custom = providerItems.filter {
-                it.category.equals(category, true) || it.category.equals("All", true) ||
+                (it.category.equals(category, true) || it.category.equals("All", true) ||
                     (category == "Donghua" && it.category.equals("Anime", true)) ||
-                    (category == "Manhwa" && it.category.equals("Manga", true))
+                    (category == "Manhwa" && it.category.equals("Manga", true))) &&
+                    (term.isBlank() || it.title.contains(term, true) || it.description.contains(term, true) || it.subtitle.contains(term, true))
             }
             val displayed = (results + custom).distinctBy { it.id }
             LazyColumn(verticalArrangement = Arrangement.spacedBy(9.dp), contentPadding = PaddingValues(bottom = 20.dp)) {
