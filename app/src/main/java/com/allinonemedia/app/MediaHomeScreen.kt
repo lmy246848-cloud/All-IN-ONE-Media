@@ -727,7 +727,7 @@ private fun MediaCardRow(
                             color = Purple, fontSize = 11.sp
                         )
                     }
-                    if (CatalogService.isDownloadable(item.streamUrl)) {
+                    if (CatalogService.isDownloadable(item.streamUrl) && item.httpHeaders.isEmpty()) {
                         IconButton(onClick = { onDownload(item) }) { Icon(Icons.Filled.Download, contentDescription = "Download", tint = Aqua) }
                     }
                 }
