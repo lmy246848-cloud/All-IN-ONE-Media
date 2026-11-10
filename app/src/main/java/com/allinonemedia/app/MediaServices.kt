@@ -98,7 +98,7 @@ object CatalogService {
 
     private fun aniList(term: String, manga: Boolean): List<MediaCard> {
         val type = if (manga) "MANGA" else "ANIME"
-        val query = "query SearchMedia($search: String!, $type: MediaType!) { Page(perPage: 20) { media(search: $search, type: $type, sort: POPULARITY_DESC) { id title { english romaji } description(asHtml: false) siteUrl episodes chapters averageScore format coverImage { large } } } }"
+        val query = "query SearchMedia(\$search: String!, \$type: MediaType!) { Page(perPage: 20) { media(search: \$search, type: \$type, sort: POPULARITY_DESC) { id title { english romaji } description(asHtml: false) siteUrl episodes chapters averageScore format coverImage { large } } } }"
         val payload = JSONObject().put("query", query).put("variables", JSONObject().put("search", term).put("type", type))
         val root = JSONObject(request("https://graphql.anilist.co", "POST", payload.toString()))
         val media = root.optJSONObject("data")?.optJSONObject("Page")?.optJSONArray("media") ?: JSONArray()
@@ -167,15 +167,17 @@ object CatalogService {
 
     suspend fun fetchProvider(provider: MediaProvider): List<MediaCard> = withContext(Dispatchers.IO) {
         val url = provider.url.trim()
-        require(url.startsWith("https://") || url.startsWith("http://")) { "Provider URL must start with http:// or https://" }
+        require(url.startsWith("https://")) { "For safety, provider URLs must use HTTPS." }
         if (isPlayable(url)) return@withContext listOf(MediaCard(
             id = "source-" + provider.id, title = provider.name, subtitle = "Direct media source",
             category = provider.category, streamUrl = url, providerName = provider.name
         ))
         val text = request(url)
         if (text.trimStart().startsWith("#EXTM3U")) return@withContext parseM3u(text, provider)
-        val json = JSONObject(text)
-        val array = json.optJSONArray("items") ?: json.optJSONArray("results") ?: JSONArray()
+        val array = if (text.trimStart().startsWith("[")) JSONArray(text) else {
+            val json = JSONObject(text)
+            json.optJSONArray("items") ?: json.optJSONArray("results") ?: JSONArray()
+        }
         (0 until array.length()).mapNotNull { i ->
             val o = array.optJSONObject(i) ?: return@mapNotNull null
             val stream = o.optString("streamUrl", o.optString("url"))
@@ -198,7 +200,7 @@ object CatalogService {
         var index = 0
         text.lineSequence().map { it.trim() }.filter { it.isNotBlank() }.forEach { line ->
             if (line.startsWith("#EXTINF", true)) title = line.substringAfter(",", "Stream").trim().ifBlank { "Stream" }
-            else if (line.startsWith("http://") || line.startsWith("https://")) {
+            else if (line.startsWith("https://")) {
                 result.add(MediaCard(provider.id + "-" + index++, title, "Playlist • " + provider.name,
                     provider.category, streamUrl = line, providerName = provider.name))
                 title = provider.name
