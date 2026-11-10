@@ -52,7 +52,7 @@ jobs:
             echo "apk_path=app/build/outputs/apk/release/app-release.apk" >> "$GITHUB_OUTPUT"
             echo "signing_mode=stable-release" >> "$GITHUB_OUTPUT"
           else
-            echo "::warning::Stable signing secrets are not configured. This fallback APK uses the runner's temporary debug key and will not be update-compatible with future CI builds."
+            echo "::warning::Stable signing secrets are not configured. This APK uses a temporary runner debug key; future CI builds will not be update-compatible until stable signing is configured."
             gradle --no-daemon :app:assembleDebug
             echo "apk_path=app/build/outputs/apk/debug/app-debug.apk" >> "$GITHUB_OUTPUT"
             echo "signing_mode=temporary-debug" >> "$GITHUB_OUTPUT"
@@ -70,13 +70,13 @@ jobs:
         if: github.ref == 'refs/heads/scratch-rebuild'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v0.3.1-build-${{ github.run_number }}
-          name: All IN ONE Media v0.3.1 (build ${{ github.run_number }})
+          tag_name: v0.3.2-build-${{ github.run_number }}
+          name: All IN ONE Media v0.3.2 (build ${{ github.run_number }})
           body: |
-            All IN ONE Media v0.3.1.
+            All IN ONE Media v0.3.2.
+            This build uses a fresh application ID so it can install alongside older builds signed with an unrecoverable temporary CI key.
             Signing mode: ${{ steps.build.outputs.signing_mode }}.
-            Stable update signing requires KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS and KEY_PASSWORD repository Actions secrets.
-            If this is a temporary-debug build, uninstall the older APK before installing this one. Configure stable signing before future updates.
+            Configure KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS and KEY_PASSWORD repository Actions secrets to make future updates install over this version.
           files: dist/All-IN-ONE-Media.apk
           make_latest: true
           draft: false
@@ -89,6 +89,6 @@ jobs:
       - name: Keep Actions artifact
         uses: actions/upload-artifact@v4
         with:
-          name: All-IN-ONE-Media-v0.3.1-APK
+          name: All-IN-ONE-Media-v0.3.2-APK
           path: dist/All-IN-ONE-Media.apk
           if-no-files-found: error
