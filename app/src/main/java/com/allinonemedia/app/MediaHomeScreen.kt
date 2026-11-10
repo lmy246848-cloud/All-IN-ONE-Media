@@ -777,7 +777,7 @@ private fun VideoPlayerDialog(item: MediaCard, onDismiss: () -> Unit) {
                     TextButton(onClick = onDismiss) { Text("Close", color = Purple) }
                 }
                 AndroidView(
-                    factory = { viewContext -> PlayerView(viewContext).apply { player = player; useController = true } },
+                    factory = { viewContext -> PlayerView(viewContext).apply { this.player = player; useController = true } },
                     modifier = Modifier.fillMaxWidth().height(245.dp)
                 )
                 Text("Playback uses the stream URL supplied by your provider.", color = SoftText, fontSize = 10.sp, modifier = Modifier.padding(top = 8.dp))
