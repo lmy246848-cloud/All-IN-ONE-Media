@@ -44,6 +44,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -817,9 +818,11 @@ private fun SettingsScreen(
 @Composable
 private fun ReaderDialog(item: MediaCard, onDismiss: () -> Unit) {
     var pageIndex by remember(item.id) { mutableIntStateOf(0) }
+    var fontSize by remember(item.id) { mutableFloatStateOf(17f) }
+    var showReaderControls by remember(item.id) { mutableStateOf(true) }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(
-            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            modifier = Modifier.fillMaxWidth().fillMaxHeight(0.94f).padding(8.dp),
             shape = RoundedCornerShape(20.dp),
             color = Color(0xFF100D19)
         ) {
@@ -835,16 +838,35 @@ private fun ReaderDialog(item: MediaCard, onDismiss: () -> Unit) {
                     AsyncImage(
                         model = item.pages[pageIndex.coerceIn(item.pages.indices)],
                         contentDescription = "Page " + (pageIndex + 1),
-                        modifier = Modifier.fillMaxWidth().height(470.dp).clip(RoundedCornerShape(10.dp))
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(10.dp))
+                            .background(Color(0xFF050407))
                     )
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().padding(top = 10.dp)) {
                         OutlinedButton(onClick = { pageIndex = (pageIndex - 1).coerceAtLeast(0) }, enabled = pageIndex > 0) { Text("Previous") }
                         Text((pageIndex + 1).toString() + " / " + item.pages.size, color = SoftText, fontSize = 12.sp)
                         Button(onClick = { pageIndex = (pageIndex + 1).coerceAtMost(item.pages.lastIndex) }, enabled = pageIndex < item.pages.lastIndex) { Text("Next") }
                     }
+                    Slider(
+                        value = pageIndex.toFloat(), onValueChange = { pageIndex = it.toInt().coerceIn(item.pages.indices) },
+                        valueRange = 0f..(item.pages.lastIndex.coerceAtLeast(1)).toFloat(),
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 } else {
-                    Column(Modifier.fillMaxWidth().heightIn(min = 250.dp, max = 620.dp).verticalScroll(rememberScrollState()).padding(8.dp)) {
-                        Text(item.textContent, color = Color(0xFFF2ECFA), fontSize = 15.sp, lineHeight = 24.sp)
+                    Column(Modifier.fillMaxWidth().weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Text size", color = SoftText, fontSize = 11.sp)
+                            Spacer(Modifier.width(10.dp))
+                            Slider(value = fontSize, onValueChange = { fontSize = it }, valueRange = 13f..28f, modifier = Modifier.weight(1f))
+                            Text(fontSize.toInt().toString(), color = SoftText, fontSize = 11.sp)
+                        }
+                        Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 8.dp, vertical = 12.dp)) {
+                            if (item.description.isNotBlank()) {
+                                Text(item.description, color = Purple, fontSize = (fontSize - 1).sp, lineHeight = (fontSize + 7).sp)
+                                Spacer(Modifier.height(16.dp))
+                            }
+                            Text(item.textContent, color = Color(0xFFF2ECFA), fontSize = fontSize.sp, lineHeight = (fontSize * 1.55f).sp)
+                        }
                     }
                 }
             }
