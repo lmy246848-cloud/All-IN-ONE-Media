@@ -14,12 +14,14 @@ data class MediaCard(
     val id: String, val title: String, val subtitle: String, val category: String,
     val pageUrl: String = "", val streamUrl: String = "", val coverUrl: String = "",
     val description: String = "", val providerName: String = "",
-    val pages: List<String> = emptyList(), val textContent: String = ""
+    val pages: List<String> = emptyList(), val textContent: String = "",
+    val textUrl: String = "", val childItems: List<MediaCard> = emptyList()
 ) {
     fun toJson() = JSONObject().put("id", id).put("title", title).put("subtitle", subtitle)
         .put("category", category).put("pageUrl", pageUrl).put("streamUrl", streamUrl)
         .put("coverUrl", coverUrl).put("description", description).put("providerName", providerName)
-        .put("pages", JSONArray(pages)).put("content", textContent)
+        .put("pages", JSONArray(pages)).put("content", textContent).put("textUrl", textUrl)
+        .put("children", JSONArray().apply { childItems.forEach { put(it.toJson()) } })
 
     companion object {
         fun fromJson(o: JSONObject) = MediaCard(
@@ -28,7 +30,10 @@ data class MediaCard(
             o.optString("streamUrl"), o.optString("coverUrl"), o.optString("description"),
             o.optString("providerName"),
             o.optJSONArray("pages")?.let { a -> (0 until a.length()).map { i -> a.optString(i) } } ?: emptyList(),
-            o.optString("content")
+            o.optString("content"), o.optString("textUrl"),
+            o.optJSONArray("children")?.let { a ->
+                (0 until a.length()).mapNotNull { i -> a.optJSONObject(i)?.let(::fromJson) }
+            } ?: emptyList()
         )
     }
 }
@@ -40,6 +45,8 @@ data class MediaProvider(val id: String, val name: String, val category: String,
             o.optString("category", "All"), o.optString("url"), o.optBoolean("enabled", true))
     }
 }
+
+data class MediaChapter(val id: String, val title: String, val subtitle: String = "")
 
 class AppStore(context: Context) {
     private val prefs = context.getSharedPreferences("all_in_one_media", Context.MODE_PRIVATE)
@@ -71,12 +78,14 @@ class AppStore(context: Context) {
 object CatalogService {
     suspend fun search(category: String, term: String, tmdbKey: String): List<MediaCard> = withContext(Dispatchers.IO) {
         when (category) {
-            "Anime", "Donghua", "Manga", "Manhwa" -> aniList(term, category == "Manga" || category == "Manhwa")
-            "Movies", "Series" -> {
-                if (tmdbKey.isBlank()) throw IllegalStateException("Add your free TMDB API key in Settings to search movies and series.")
-                tmdb(term, category == "Series", tmdbKey)
+            "Anime", "Donghua" -> aniList(term, false)
+            "Manga", "Manhwa" -> mangaDexSearch(term, category)
+            "Movies" -> archiveMovies(term)
+            "Series" -> {
+                if (tmdbKey.isBlank()) throw IllegalStateException("Add your free TMDB API key in Settings to search TV series. TV catalogue results do not include episode streams; add a compatible provider or open the official source page.")
+                tmdb(term, true, tmdbKey)
             }
-            "Light Novels" -> openLibrary(term)
+            "Light Novels" -> gutendex(term)
             else -> emptyList()
         }
     }
@@ -149,6 +158,157 @@ object CatalogService {
         }
     }
 
+    private fun mangaDexSearch(term: String, category: String): List<MediaCard> {
+        val q = URLEncoder.encode(term, "UTF-8")
+        val endpoint = "https://api.mangadex.org/manga?title=$q&limit=24" +
+            "&includes%5B%5D=cover_art&contentRating%5B%5D=safe&contentRating%5B%5D=suggestive" +
+            "&availableTranslatedLanguage%5B%5D=en&order%5Brelevance%5D=desc"
+        val root = JSONObject(request(endpoint))
+        val list = root.optJSONArray("data") ?: JSONArray()
+        return (0 until list.length()).mapNotNull { i ->
+            val item = list.optJSONObject(i) ?: return@mapNotNull null
+            val id = item.optString("id")
+            val attributes = item.optJSONObject("attributes") ?: JSONObject()
+            val titles = attributes.optJSONObject("title") ?: JSONObject()
+            val title = sequenceOf("en", "ja-ro", "ja").map { titles.optString(it) }
+                .firstOrNull { it.isNotBlank() } ?: "Untitled manga"
+            val descriptions = attributes.optJSONObject("description") ?: JSONObject()
+            val description = sequenceOf("en", "ja-ro", "ja").map { descriptions.optString(it) }
+                .firstOrNull { it.isNotBlank() }.orEmpty()
+            val relationships = item.optJSONArray("relationships") ?: JSONArray()
+            var coverFile = ""
+            for (r in 0 until relationships.length()) {
+                val rel = relationships.optJSONObject(r) ?: continue
+                if (rel.optString("type") == "cover_art") {
+                    coverFile = rel.optJSONObject("attributes")?.optString("fileName").orEmpty()
+                    if (coverFile.isNotBlank()) break
+                }
+            }
+            val status = attributes.optString("status").replaceFirstChar { it.uppercase() }
+            val year = attributes.optInt("year")
+            MediaCard(
+                id = "mangadex-$id", title = title,
+                subtitle = listOf(category, status.takeIf { it.isNotBlank() }, year.takeIf { it > 0 }?.toString())
+                    .filterNotNull().joinToString(" • "),
+                category = category, pageUrl = "https://mangadex.org/title/$id",
+                coverUrl = if (coverFile.isNotBlank()) "https://uploads.mangadex.org/covers/$id/$coverFile.256.jpg" else "",
+                description = description, providerName = "MangaDex"
+            )
+        }
+    }
+
+    private fun gutendex(term: String): List<MediaCard> {
+        val q = URLEncoder.encode(term, "UTF-8")
+        val root = JSONObject(request("https://gutendex.com/books/?search=$q&languages=en&mime_type=text%2F"))
+        val list = root.optJSONArray("results") ?: JSONArray()
+        return (0 until list.length()).mapNotNull { i ->
+            val book = list.optJSONObject(i) ?: return@mapNotNull null
+            val formats = book.optJSONObject("formats") ?: JSONObject()
+            val textUrl = formats.keys().asSequence()
+                .filter { it.startsWith("text/plain", true) }
+                .map { formats.optString(it) }
+                .firstOrNull { it.startsWith("https://", true) }.orEmpty()
+            val htmlUrl = formats.optString("text/html")
+            val authors = book.optJSONArray("authors") ?: JSONArray()
+            val author = (0 until authors.length()).mapNotNull { authors.optJSONObject(it)?.optString("name") }
+                .filter { it.isNotBlank() }.joinToString(", ")
+            val subjects = book.optJSONArray("subjects") ?: JSONArray()
+            val subject = (0 until subjects.length()).map { subjects.optString(it) }.take(2).joinToString(" • ")
+            val id = book.optInt("id")
+            val image = formats.optString("image/jpeg")
+            MediaCard(
+                id = "gutenberg-$id", title = book.optString("title", "Untitled"),
+                subtitle = author.ifBlank { "Project Gutenberg" }, category = "Light Novels",
+                pageUrl = "https://www.gutenberg.org/ebooks/$id",
+                coverUrl = image, description = subject, providerName = "Project Gutenberg",
+                textUrl = textUrl.ifBlank { htmlUrl }
+            )
+        }
+    }
+
+    private fun archiveMovies(term: String): List<MediaCard> {
+        val query = URLEncoder.encode("mediatype:movies AND title:($term)", "UTF-8")
+        val endpoint = "https://archive.org/advancedsearch.php?q=$query&fl%5B%5D=identifier" +
+            "&fl%5B%5D=title&fl%5B%5D=description&fl%5B%5D=year&rows=24&page=1&output=json"
+        val root = JSONObject(request(endpoint))
+        val docs = root.optJSONObject("response")?.optJSONArray("docs") ?: JSONArray()
+        return (0 until docs.length()).mapNotNull { i ->
+            val item = docs.optJSONObject(i) ?: return@mapNotNull null
+            val id = item.optString("identifier")
+            if (id.isBlank()) return@mapNotNull null
+            val year = item.optString("year")
+            MediaCard(
+                id = "archive-$id", title = item.optString("title", id),
+                subtitle = "Internet Archive" + if (year.isNotBlank()) " • $year" else "",
+                category = "Movies", pageUrl = "https://archive.org/details/$id",
+                coverUrl = "https://archive.org/services/img/$id",
+                description = item.optString("description").replace(Regex("<[^>]*>"), " ").take(380),
+                providerName = "Internet Archive"
+            )
+        }
+    }
+
+    suspend fun mangaChapters(mangaId: String): List<MediaChapter> = withContext(Dispatchers.IO) {
+        val id = URLEncoder.encode(mangaId, "UTF-8")
+        val endpoint = "https://api.mangadex.org/manga/$id/feed?translatedLanguage%5B%5D=en" +
+            "&order%5Bchapter%5D=asc&limit=100"
+        val root = JSONObject(request(endpoint))
+        val list = root.optJSONArray("data") ?: JSONArray()
+        (0 until list.length()).mapNotNull { index ->
+            val entry = list.optJSONObject(index) ?: return@mapNotNull null
+            val chapterId = entry.optString("id")
+            val attr = entry.optJSONObject("attributes") ?: JSONObject()
+            if (chapterId.isBlank()) return@mapNotNull null
+            val number = attr.optString("chapter").ifBlank { "?" }
+            val volume = attr.optString("volume")
+            val name = attr.optString("title")
+            val label = "Chapter $number" + if (name.isNotBlank()) " — $name" else ""
+            MediaChapter(chapterId, label, if (volume.isNotBlank()) "Volume $volume" else "")
+        }
+    }
+
+    suspend fun mangaPages(chapterId: String): List<String> = withContext(Dispatchers.IO) {
+        val id = URLEncoder.encode(chapterId, "UTF-8")
+        val root = JSONObject(request("https://api.mangadex.org/at-home/server/$id"))
+        val chapter = root.optJSONObject("chapter") ?: throw IllegalStateException("MangaDex returned no chapter data.")
+        val base = root.optString("baseUrl").trimEnd('/')
+        val hash = chapter.optString("hash")
+        val files = chapter.optJSONArray("data") ?: chapter.optJSONArray("dataSaver") ?: JSONArray()
+        if (base.isBlank() || hash.isBlank() || files.length() == 0) {
+            throw IllegalStateException("No readable image pages were provided for this chapter.")
+        }
+        val folder = if (chapter.has("data") && !chapter.isNull("data")) "data" else "data-saver"
+        (0 until files.length()).mapNotNull { index ->
+            val file = files.optString(index)
+            file.takeIf { it.isNotBlank() }?.let { "$base/$folder/$hash/$it" }
+        }
+    }
+
+    suspend fun fetchPlainText(url: String): String = withContext(Dispatchers.IO) {
+        require(url.startsWith("https://", true)) { "The book text link must use HTTPS." }
+        request(url)
+    }
+
+    suspend fun archiveStream(identifier: String): String = withContext(Dispatchers.IO) {
+        val safeId = URLEncoder.encode(identifier, "UTF-8")
+        val root = JSONObject(request("https://archive.org/metadata/$safeId"))
+        val files = root.optJSONArray("files") ?: JSONArray()
+        val candidates = (0 until files.length()).mapNotNull { index ->
+            files.optJSONObject(index)?.takeIf { file ->
+                val name = file.optString("name").lowercase()
+                name.endsWith(".mp4") && !name.contains("thumb") && !name.contains("sample")
+            }
+        }
+        if (candidates.isEmpty()) throw IllegalStateException("This Internet Archive item has no MP4 stream file available.")
+        val selected = candidates.sortedWith(
+            compareByDescending<JSONObject> { it.optString("format").contains("mpeg4", true) }
+                .thenBy { it.optString("size").toLongOrNull() ?: Long.MAX_VALUE }
+        ).first()
+        val fileName = selected.optString("name")
+        if (fileName.isBlank()) throw IllegalStateException("The archive item has no usable video filename.")
+        "https://archive.org/download/$safeId/" + URLEncoder.encode(fileName, "UTF-8").replace("+", "%20")
+    }
+
     private fun tmdb(term: String, tv: Boolean, key: String): List<MediaCard> {
         val q = URLEncoder.encode(term, "UTF-8")
         val route = if (tv) "tv" else "movie"
@@ -201,7 +361,7 @@ object CatalogService {
                 val wrapperKeys = listOf(
                     "items", "results", "data", "titles", "entries", "list",
                     "catalog", "catalogue", "manga", "anime", "books", "streams",
-                    "response", "payload", "chapters"
+                    "response", "payload", "chapters", "episodes"
                 )
                 for (key in wrapperKeys) {
                     if (!value.has(key) || value.isNull(key)) continue
@@ -297,7 +457,8 @@ object CatalogService {
         }
     }
 
-    private fun cardFromProviderEntry(entry: Any?, index: Int, provider: MediaProvider): MediaCard? {
+    private fun cardFromProviderEntry(entry: Any?, index: Int, provider: MediaProvider, depth: Int = 0): MediaCard? {
+        if (depth > 3) return null
         if (entry is String) {
             val raw = entry.trim()
             if (raw.isBlank()) return null
@@ -339,8 +500,18 @@ object CatalogService {
         val pagesValue = firstValue(item, "pages", "pageUrls", "page_urls", "images", "chapterPages", "chapter_pages")
             ?: firstValue(metadata, "pages", "pageUrls", "page_urls", "images")
         val content = field("content", "text", "chapterText", "chapter_text", "body")
+        val textUrl = field("textUrl", "text_url", "readerUrl", "reader_url", "textFile", "downloadUrl")
         val title = field("title", "name", "label", "mangaTitle", "animeTitle", "bookTitle")
         val itemId = field("id", "slug", "key").ifBlank { provider.id + "-" + index }
+        val nestedValue = firstValue(item, "episodes", "chapters", "children", "parts")
+        val nestedArray = when (nestedValue) {
+            is JSONArray -> nestedValue
+            is JSONObject -> JSONArray().put(nestedValue)
+            else -> JSONArray()
+        }
+        val children = (0 until nestedArray.length()).mapNotNull { childIndex ->
+            cardFromProviderEntry(nestedArray.opt(childIndex), childIndex, provider, depth + 1)
+        }
 
         return MediaCard(
             id = itemId,
@@ -354,7 +525,9 @@ object CatalogService {
             description = field("summary", "description", "overview"),
             providerName = provider.name,
             pages = stringList(pagesValue).filter { it.startsWith("https://", true) },
-            textContent = content
+            textContent = content,
+            textUrl = textUrl,
+            childItems = children
         )
     }
 
