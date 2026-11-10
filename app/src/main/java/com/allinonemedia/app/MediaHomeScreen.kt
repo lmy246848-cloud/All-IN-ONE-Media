@@ -182,9 +182,11 @@ fun AllInOneApp() {
                 AnimatedContent(targetState = page, label = "main-pages") { destination ->
                     when (destination) {
                         "Home" -> HomeScreen(
-                            foreground, secondary, surface, library,
+                            foreground, secondary, surface, library, sourceItems,
                             onCategory = { category -> discoverCategory = category; page = "Discover" },
-                            onDiscover = { page = "Discover" }, onLibrary = { page = "Library" }
+                            onDiscover = { page = "Discover" }, onLibrary = { page = "Library" },
+                            onSave = { toggleLibrary(it) }, onOpen = { openItem(it) },
+                            onPlay = { activeVideo = it }, onDownload = { downloadMedia(context, it) }
                         )
                         "Discover" -> DiscoverScreen(
                             initialCategory = discoverCategory, providerItems = sourceItems, tmdbKey = tmdbKey,
@@ -224,7 +226,7 @@ fun AllInOneApp() {
                                 try { context.startActivity(Intent(DownloadManager.ACTION_VIEW_DOWNLOADS)) } catch (_: Exception) { }
                             }
                         )
-                        else -> HomeScreen(foreground, secondary, surface, library, {}, { page = "Discover" }, { page = "Library" })
+                        else -> HomeScreen(foreground, secondary, surface, library, sourceItems, {}, { page = "Discover" }, { page = "Library" }, { toggleLibrary(it) }, { openItem(it) }, { activeVideo = it }, { downloadMedia(context, it) })
                     }
                 }
             }
@@ -267,8 +269,10 @@ private fun SplashScreen() {
 
 @Composable
 private fun HomeScreen(
-    foreground: Color, secondary: Color, surface: Color, library: List<MediaCard>,
-    onCategory: (String) -> Unit, onDiscover: () -> Unit, onLibrary: () -> Unit
+    foreground: Color, secondary: Color, surface: Color, library: List<MediaCard>, providerItems: List<MediaCard>,
+    onCategory: (String) -> Unit, onDiscover: () -> Unit, onLibrary: () -> Unit,
+    onSave: (MediaCard) -> Unit, onOpen: (MediaCard) -> Unit,
+    onPlay: (MediaCard) -> Unit, onDownload: (MediaCard) -> Unit
 ) {
     LazyColumn(
         Modifier.fillMaxSize().padding(horizontal = 16.dp),
@@ -309,6 +313,27 @@ private fun HomeScreen(
                             CategoryTile(name, surface, foreground, secondary, Modifier.weight(1f)) { onCategory(name) }
                         }
                         if (pair.size == 1) Spacer(Modifier.weight(1f))
+                    }
+                }
+            }
+        }
+        item {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("From your extensions", color = foreground, fontSize = 19.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                TextButton(onClick = onDiscover) { Text("Browse", color = Purple) }
+            }
+            if (providerItems.isEmpty()) {
+                Card(colors = CardDefaults.cardColors(containerColor = surface), shape = RoundedCornerShape(18.dp)) {
+                    Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                        Text("No synced titles yet", color = foreground, fontWeight = FontWeight.SemiBold)
+                        Text("Open Extensions, install or add a source, then tap Sync. Its titles will appear here.", color = secondary, fontSize = 12.sp)
+                        TextButton(onClick = onDiscover) { Text("Explore catalogues", color = Purple) }
+                    }
+                }
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    providerItems.take(8).forEach { item ->
+                        MediaCardRow(item, library.any { it.id == item.id }, onSave, onOpen, onPlay, onDownload)
                     }
                 }
             }
