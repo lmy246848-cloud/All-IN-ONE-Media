@@ -827,8 +827,11 @@ object CatalogService {
         "anime", "donghua", "series" -> setOf("series")
         "movies" -> setOf("movie")
         "shorts" -> setOf("channel", "tv")
-        "all" -> setOf("movie", "series", "channel", "tv")
-        else -> emptySet()
+        "manga" -> setOf("manga")
+        "manhwa" -> setOf("manhwa", "manga")
+        "light novels" -> setOf("novel", "book", "light_novel")
+        "all" -> setOf("movie", "series", "channel", "tv", "manga", "manhwa", "novel", "book", "light_novel")
+        else -> setOf("__unsupported__")
     }
 
     private fun stremioCard(value: JSONObject, provider: MediaProvider, forcedType: String = ""): MediaCard? {
