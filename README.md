@@ -2,7 +2,7 @@
 
 All IN ONE Media is an Android media hub for searching titles, adding compatible sources, opening episodes and chapters, reading text and image pages, and playing supported video streams.
 
-## Version 0.5.0
+## Version 0.4.3
 
 - Anime and donghua title discovery through AniList metadata.
 - Manga and manhwa search through MangaDex, including English chapter lists, scanlation-group attribution, and a continuous vertical image reader.
@@ -34,13 +34,13 @@ The app does not bundle films, episodes, manga scans, novels, or third-party APK
 
 ## Build
 
-- Android application ID: `com.allinonemedia.app.v050`
-- Version: `0.5.0` (versionCode 10)
+- Android application ID: `com.allinonemedia.app.v043`
+- Version: `0.4.3` (versionCode 11)
 - Minimum Android version: Android 8.0 (API 26)
 - Build branch: [scratch-rebuild](https://github.com/lmy246848-cloud/All-IN-ONE-Media/tree/scratch-rebuild)
 - APK workflow: [Android APK and Release](https://github.com/lmy246848-cloud/All-IN-ONE-Media/actions/workflows/android.yml)
 
-The GitHub Actions workflow produces an APK and verifies its ZIP structure, package metadata, and signature before publishing it. This 0.5.0 build uses a new application ID (`com.allinonemedia.app.v050`) so it can install alongside earlier builds despite the unrecoverable temporary CI signing key. Android treats it as a separate app, so local library/provider data from 0.4.0 is not copied automatically. Without a persistent keystore configured through Actions secrets, later CI builds will also need separate install identities or a reinstall after a signing-key change.
+The GitHub Actions workflow produces an APK and verifies its ZIP structure, package metadata, and signature before publishing it. This 0.4.3 build uses a new application ID (`com.allinonemedia.app.v043`) so it can install alongside earlier builds despite the unrecoverable temporary CI signing key. Android treats it as a separate app, so local library/provider data from 0.4.0 is not copied automatically. Without a persistent keystore configured through Actions secrets, later CI builds will also need separate install identities or a reinstall after a signing-key change.
 
 ## API references
 
