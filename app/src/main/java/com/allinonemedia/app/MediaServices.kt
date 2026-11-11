@@ -28,7 +28,8 @@ data class MediaCard(
     val pages: List<String> = emptyList(), val textContent: String = "",
     val textUrl: String = "", val childItems: List<MediaCard> = emptyList(),
     val mimeType: String = "", val httpHeaders: Map<String, String> = emptyMap(),
-    val providerId: String = ""
+    val providerId: String = "",
+    val externalKind: String = "", val externalId: String = "", val externalType: String = ""
 ) {
     fun toJson(): JSONObject = JSONObject().put("id", id).put("title", title).put("subtitle", subtitle)
         .put("category", category).put("pageUrl", pageUrl).put("streamUrl", streamUrl)
@@ -36,6 +37,7 @@ data class MediaCard(
         .put("pages", JSONArray(pages)).put("content", textContent).put("textUrl", textUrl)
         .put("children", JSONArray().apply { childItems.forEach { put(it.toJson()) } })
         .put("mimeType", mimeType).put("headers", JSONObject(httpHeaders)).put("providerId", providerId)
+        .put("externalKind", externalKind).put("externalId", externalId).put("externalType", externalType)
 
     companion object {
         fun fromJson(o: JSONObject): MediaCard = MediaCard(
@@ -55,7 +57,7 @@ data class MediaCard(
                     if (isValidMediaHeader(key, value)) key to value else null
                 }.toMap()
             } ?: emptyMap(),
-            o.optString("providerId")
+            o.optString("providerId"), o.optString("externalKind"), o.optString("externalId"), o.optString("externalType")
         )
     }
 }
@@ -767,6 +769,270 @@ object CatalogService {
         return cards
     }
 
+    private data class StremioManifest(
+        val id: String, val name: String, val types: Set<String>, val catalogs: List<JSONObject>,
+        val resources: Set<String>, val description: String
+    )
+
+    private fun isStremioManifest(json: JSONObject): Boolean =
+        json.has("id") && json.has("name") && json.has("resources") &&
+            (json.opt("resources") is JSONArray) && (json.opt("types") is JSONArray)
+
+    private fun parseStremioManifest(json: JSONObject): StremioManifest {
+        val resourcesJson = json.optJSONArray("resources") ?: JSONArray()
+        val resources = (0 until resourcesJson.length()).mapNotNull { index ->
+            val value = resourcesJson.opt(index)
+            when (value) {
+                is String -> value
+                is JSONObject -> value.optString("name").takeIf { it.isNotBlank() }
+                else -> null
+            }
+        }.toSet()
+        val typesJson = json.optJSONArray("types") ?: JSONArray()
+        val types = (0 until typesJson.length()).map { typesJson.optString(it).lowercase() }.filter { it.isNotBlank() }.toSet()
+        val catalogsJson = json.optJSONArray("catalogs") ?: JSONArray()
+        val catalogs = (0 until catalogsJson.length()).mapNotNull { catalogsJson.optJSONObject(it) }
+        if (resources.isEmpty()) throw IllegalStateException("This add-on manifest declares no usable resources.")
+        return StremioManifest(
+            json.optString("id"), json.optString("name").ifBlank { "Stremio add-on" },
+            types, catalogs, resources, json.optString("description")
+        )
+    }
+
+    private data class StremioEndpoint(val base: String, val query: String)
+
+    private fun stremioEndpoint(manifestUrl: String): StremioEndpoint {
+        val uri = URL(manifestUrl)
+        val path = uri.path.substringBeforeLast("/", "")
+        val basePath = path.trimEnd('/')
+        val base = URL(uri.protocol, uri.host, uri.port, basePath).toExternalForm().trimEnd('/')
+        return StremioEndpoint(base, uri.query.orEmpty())
+    }
+
+    private fun encodeSegment(value: String): String =
+        URLEncoder.encode(value, "UTF-8").replace("+", "%20")
+
+    private fun stremioResourceUrl(
+        provider: MediaProvider, resource: String, type: String, id: String, extra: Map<String, String> = emptyMap()
+    ): String {
+        val endpoint = stremioEndpoint(provider.url)
+        val pathExtra = if (extra.isEmpty()) "" else "/" + extra.entries.joinToString("&") {
+            encodeSegment(it.key) + "=" + encodeSegment(it.value)
+        }
+        val query = endpoint.query.takeIf { it.isNotBlank() }?.let { "?$it" }.orEmpty()
+        return endpoint.base + "/" + resource + "/" + encodeSegment(type) + "/" + encodeSegment(id) + pathExtra + ".json" + query
+    }
+
+    private fun stremioTypesForCategory(category: String): Set<String> = when (category.lowercase()) {
+        "anime", "donghua", "series" -> setOf("series")
+        "movies" -> setOf("movie")
+        "shorts" -> setOf("channel", "tv")
+        "all" -> setOf("movie", "series", "channel", "tv")
+        else -> emptySet()
+    }
+
+    private fun stremioCard(value: JSONObject, provider: MediaProvider, forcedType: String = ""): MediaCard? {
+        val id = value.optString("id")
+        if (id.isBlank()) return null
+        val type = value.optString("type").ifBlank { forcedType }.ifBlank { "movie" }
+        val title = value.optString("name").ifBlank { value.optString("title") }.ifBlank { "Untitled" }
+        val poster = value.optString("poster")
+        val rating = value.optString("imdbRating").takeIf { it.isNotBlank() }?.let { " • IMDb $it" }.orEmpty()
+        val release = value.optString("releaseInfo").takeIf { it.isNotBlank() }.orEmpty()
+        val genres = value.optJSONArray("genres")?.let { a ->
+            (0 until a.length()).map { a.optString(it) }.filter { it.isNotBlank() }.take(3).joinToString(" • ")
+        }.orEmpty()
+        val category = when (type.lowercase()) {
+            "movie" -> if (provider.category == "All") "Movies" else provider.category
+            "series" -> if (provider.category == "All") "Series" else provider.category
+            "tv", "channel" -> if (provider.category == "All") "Shorts" else provider.category
+            else -> provider.category
+        }
+        return MediaCard(
+            id = "stremio:" + provider.id + ":" + type + ":" + id,
+            title = title,
+            subtitle = listOf(release, genres, rating).filter { it.isNotBlank() }.joinToString(" • ").ifBlank { provider.name },
+            category = category,
+            coverUrl = poster,
+            description = value.optString("description"),
+            providerName = provider.name,
+            providerId = provider.id,
+            externalKind = "stremio_meta",
+            externalId = id,
+            externalType = type
+        )
+    }
+
+    private fun fetchStremioCatalog(
+        provider: MediaProvider, catalog: JSONObject, search: String = ""
+    ): List<MediaCard> {
+        val type = catalog.optString("type")
+        val id = catalog.optString("id")
+        if (type.isBlank() || id.isBlank()) return emptyList()
+        val extraJson = catalog.optJSONArray("extra") ?: JSONArray()
+        val searchSupported = (0 until extraJson.length()).mapNotNull { extraJson.optJSONObject(it) }
+            .any { it.optString("name").equals("search", true) }
+        if (search.isNotBlank() && !searchSupported) return emptyList()
+        val extra = if (search.isNotBlank()) mapOf("search" to search) else emptyMap()
+        val url = stremioResourceUrl(provider, "catalog", type, id, extra)
+        val response = requestDetailed(url, headers = provider.headers)
+        val root = JSONObject(response.body)
+        val metas = root.optJSONArray("metas")
+            ?: root.optJSONObject("result")?.optJSONArray("metas")
+            ?: JSONArray()
+        (0 until metas.length()).mapNotNull { index ->
+            stremioCard(metas.optJSONObject(index) ?: return@mapNotNull null, provider, type)
+        }
+    }
+
+    private fun stremioCatalogs(provider: MediaProvider, manifestJson: JSONObject): List<MediaCard> {
+        val manifest = parseStremioManifest(manifestJson)
+        if ("catalog" !in manifest.resources) {
+            throw IllegalStateException(
+                "${manifest.name} has no catalogue resource. It may only provide streams for IDs discovered elsewhere; this app cannot list titles from it yet."
+            )
+        }
+        val allowedTypes = stremioTypesForCategory(provider.category)
+        val catalogs = manifest.catalogs.filter { allowedTypes.isEmpty() || it.optString("type").lowercase() in allowedTypes }.take(12)
+        if (catalogs.isEmpty()) {
+            throw IllegalStateException(
+                "${manifest.name} is a valid Stremio add-on, but it has no ${provider.category} catalogues. Try Content type All or a different add-on."
+            )
+        }
+        val results = mutableListOf<MediaCard>()
+        val errors = mutableListOf<String>()
+        catalogs.forEach { catalog ->
+            runCatching { results += fetchStremioCatalog(provider, catalog) }
+                .onFailure { errors += (catalog.optString("name").ifBlank { catalog.optString("id") }) + ": " + (it.message ?: "request failed") }
+        }
+        if (results.isEmpty()) {
+            val detail = errors.firstOrNull()?.take(160) ?: "The add-on returned no catalogue titles."
+            throw IllegalStateException("${manifest.name} connected, but its catalogues returned no titles. $detail")
+        }
+        return results.distinctBy { it.id }
+    }
+
+    suspend fun searchStremioProviders(
+        providers: List<MediaProvider>, category: String, term: String
+    ): List<MediaCard> = withContext(Dispatchers.IO) {
+        if (term.isBlank()) return@withContext emptyList()
+        val allowedTypes = stremioTypesForCategory(category)
+        val results = mutableListOf<MediaCard>()
+        providers.filter { it.enabled && it.url.endsWith("/manifest.json", true) }.forEach { provider ->
+            try {
+                val response = requestDetailed(provider.url, headers = provider.headers)
+                val manifestJson = JSONObject(response.body)
+                val manifest = parseStremioManifest(manifestJson)
+                if ("catalog" !in manifest.resources) return@forEach
+                manifest.catalogs.filter {
+                    (allowedTypes.isEmpty() || it.optString("type").lowercase() in allowedTypes) &&
+                        (it.optJSONArray("extra")?.let { a ->
+                            (0 until a.length()).any { i -> a.optJSONObject(i)?.optString("name")?.equals("search", true) == true }
+                        } ?: false)
+                }.take(6).forEach { catalog ->
+                    runCatching { results += fetchStremioCatalog(provider, catalog, term.trim()) }
+                }
+            } catch (_: Exception) {
+                // One unavailable add-on must not break searches from other providers.
+            }
+        }
+        results.distinctBy { it.id }
+    }
+
+    suspend fun stremioMetadata(provider: MediaProvider, item: MediaCard): MediaCard = withContext(Dispatchers.IO) {
+        require(item.externalKind == "stremio_meta" && item.externalId.isNotBlank() && item.externalType.isNotBlank()) {
+            "This item does not contain Stremio metadata identifiers."
+        }
+        val url = stremioResourceUrl(provider, "meta", item.externalType, item.externalId)
+        val root = JSONObject(requestDetailed(url, headers = provider.headers).body)
+        val meta = root.optJSONObject("meta") ?: root.optJSONObject("result")?.optJSONObject("meta") ?: root
+        val title = meta.optString("name").ifBlank { item.title }
+        val videos = meta.optJSONArray("videos") ?: JSONArray()
+        val children = (0 until videos.length()).mapNotNull { index ->
+            val video = videos.optJSONObject(index) ?: return@mapNotNull null
+            val videoId = video.optString("id").ifBlank { item.externalId }
+            val episodeTitle = video.optString("title").ifBlank {
+                listOf(video.optString("season"), video.optString("episode")).filter { it.isNotBlank() }.joinToString(" • ")
+                    .ifBlank { "Episode " + (index + 1) }
+            }
+            MediaCard(
+                id = "stremio-episode:" + provider.id + ":" + videoId,
+                title = episodeTitle,
+                subtitle = listOf(video.optString("released"), video.optString("overview")).filter { it.isNotBlank() }.joinToString(" • "),
+                category = item.category,
+                providerName = provider.name,
+                providerId = provider.id,
+                externalKind = "stremio_stream",
+                externalId = videoId,
+                externalType = item.externalType
+            )
+        }.toMutableList()
+        if (children.isEmpty()) {
+            children += MediaCard(
+                id = "stremio-stream-request:" + provider.id + ":" + item.externalId,
+                title = "Find playable streams",
+                subtitle = "Ask this add-on for available video sources",
+                category = item.category,
+                providerName = provider.name,
+                providerId = provider.id,
+                externalKind = "stremio_stream",
+                externalId = item.externalId,
+                externalType = item.externalType
+            )
+        }
+        item.copy(
+            title = title,
+            description = meta.optString("description").ifBlank { item.description },
+            coverUrl = meta.optString("poster").ifBlank { item.coverUrl },
+            childItems = children,
+            subtitle = listOf(meta.optString("releaseInfo"), meta.optString("runtime"), item.subtitle)
+                .filter { it.isNotBlank() }.joinToString(" • ")
+        )
+    }
+
+    suspend fun stremioStreams(provider: MediaProvider, item: MediaCard): List<MediaCard> = withContext(Dispatchers.IO) {
+        require(item.externalKind == "stremio_stream" && item.externalId.isNotBlank() && item.externalType.isNotBlank()) {
+            "This item is not a Stremio video request."
+        }
+        val url = stremioResourceUrl(provider, "stream", item.externalType, item.externalId)
+        val root = JSONObject(requestDetailed(url, headers = provider.headers).body)
+        val streams = root.optJSONArray("streams") ?: root.optJSONObject("result")?.optJSONArray("streams") ?: JSONArray()
+        val results = (0 until streams.length()).mapNotNull { index ->
+            val stream = streams.optJSONObject(index) ?: return@mapNotNull null
+            val direct = stream.optString("url")
+            val external = stream.optString("externalUrl")
+            val behavior = stream.optJSONObject("behaviorHints")
+            val proxyHeaders = behavior?.optJSONObject("proxyHeaders")?.optJSONObject("request")
+            val headers = proxyHeaders?.let { h ->
+                h.keys().asSequence().mapNotNull { key ->
+                    val value = h.optString(key)
+                    if (isValidMediaHeader(key, value)) key to value else null
+                }.toMap()
+            } ?: provider.headers
+            val name = stream.optString("name").ifBlank { provider.name }
+            val title = stream.optString("title").ifBlank { stream.optString("description") }.ifBlank { name }
+            when {
+                isHttpsUrl(direct) -> MediaCard(
+                    id = "stremio-play:" + provider.id + ":" + index + ":" + direct.hashCode(),
+                    title = title, subtitle = name, category = item.category,
+                    streamUrl = direct, providerName = provider.name, mimeType = guessMimeType(direct),
+                    httpHeaders = headers, providerId = provider.id, externalKind = "stremio_direct"
+                )
+                isHttpsUrl(external) -> MediaCard(
+                    id = "stremio-external:" + provider.id + ":" + index,
+                    title = title, subtitle = "Open external source • " + name, category = item.category,
+                    pageUrl = external, providerName = provider.name, httpHeaders = headers,
+                    providerId = provider.id, externalKind = "stremio_external"
+                )
+                else -> null
+            }
+        }
+        if (results.isEmpty()) {
+            throw IllegalStateException("The add-on did not return a directly playable HTTPS stream. Torrent, magnet, DRM and unsupported external streams are not played by this built-in player.")
+        }
+        results
+    }
+
     suspend fun fetchProvider(provider: MediaProvider): List<MediaCard> = withContext(Dispatchers.IO) {
         val url = provider.url.trim()
         require(isHttpsUrl(url)) { "Enter a complete HTTPS provider URL." }
@@ -803,6 +1069,9 @@ object CatalogService {
         }
 
         val payload = parseJsonValue(text)
+        if (payload is JSONObject && isStremioManifest(payload)) {
+            return@withContext stremioCatalogs(provider, payload)
+        }
         val array = arrayFromPayload(payload)
         val parsedCards = (0 until array.length()).mapNotNull { index ->
             cardFromProviderEntry(array.opt(index), index, provider, baseUrl = url)
