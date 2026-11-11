@@ -903,7 +903,7 @@ private fun ProviderManagerScreen(
                     OutlinedTextField(
                         value = url, onValueChange = { url = it; error = ""; appliedMessage = "" },
                         label = { Text("Extension / provider link") },
-                        placeholder = { Text("https://example.com/source.json") },
+                        placeholder = { Text("https://addon.example/manifest.json") },
                         modifier = Modifier.fillMaxWidth(), singleLine = true,
                         shape = RoundedCornerShape(15.dp)
                     )
@@ -1091,7 +1091,7 @@ private fun SettingsScreen(
             }
         }
         Spacer(Modifier.height(10.dp))
-        Text("All IN ONE Media • Version 0.4.2", color = secondary, fontSize = 11.sp)
+        Text("All IN ONE Media • Version 0.5.0", color = secondary, fontSize = 11.sp)
         Text("Your library, providers, and settings are stored locally on this device.", color = secondary, fontSize = 10.sp)
     }
 }
@@ -1188,7 +1188,7 @@ private fun ReaderDialog(
                             color = Color(0xFFF2ECFA), fontSize = 14.sp, lineHeight = 22.sp)
                         if (item.childItems.isNotEmpty()) {
                             Spacer(Modifier.height(8.dp))
-                            Text("Episodes / chapters (" + item.childItems.size + ")", color = Purple, fontWeight = FontWeight.Bold)
+                            Text((if (item.externalKind == "stremio_stream") "Available streams" else "Episodes / chapters") + " (" + item.childItems.size + ")", color = Purple, fontWeight = FontWeight.Bold)
                             item.childItems.forEach { child ->
                                 Card(
                                     modifier = Modifier.fillMaxWidth().padding(top = 6.dp).clickable { onOpenChild(child) },
