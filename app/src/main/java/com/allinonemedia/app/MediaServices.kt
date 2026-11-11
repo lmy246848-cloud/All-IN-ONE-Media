@@ -141,7 +141,7 @@ object CatalogService {
             connection.instanceFollowRedirects = true
             connection.connectTimeout = 15000
             connection.readTimeout = 20000
-            connection.setRequestProperty("User-Agent", "AllInOneMedia/0.4.1 Android")
+            connection.setRequestProperty("User-Agent", "AllInOneMedia/0.5.0 Android")
             connection.setRequestProperty("Accept", "application/json, application/rss+xml, application/atom+xml, application/xml, application/x-mpegURL, audio/x-mpegurl, audio/*, video/*, text/plain, text/html, */*")
             headers.filter { (key, value) -> isValidMediaHeader(key, value) }.forEach { (key, value) ->
                 connection.setRequestProperty(key, value)
@@ -1051,7 +1051,12 @@ object CatalogService {
         val url = provider.url.trim()
         require(isHttpsUrl(url)) { "Enter a complete HTTPS provider URL." }
 
-        val detectedMime = if (isPlayable(url)) guessMimeType(url) else probeStreamMimeType(url, provider.headers)
+        val manifestCandidate = url.substringBefore("?").substringBefore("#").endsWith("/manifest.json", true)
+        val detectedMime = when {
+            isPlayable(url) -> guessMimeType(url)
+            manifestCandidate -> ""
+            else -> probeStreamMimeType(url, provider.headers)
+        }
         if (isPlayable(url) || detectedMime.isNotBlank()) {
             return@withContext listOf(
                 MediaCard(
