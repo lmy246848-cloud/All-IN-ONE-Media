@@ -147,31 +147,27 @@ fun AllInOneApp() {
 
     fun openItem(item: MediaCard) {
         if (item.externalKind == "stremio_meta") {
-            val provider = providers.firstOrNull { it.id == item.providerId }
-            if (provider == null) {
-                activeReader = item.copy(description = "The Stremio add-on that supplied this item is no longer installed. Re-add its manifest URL and sync again.")
-            } else {
-                activeReader = item.copy(description = "Loading details and episode list from " + provider.name + "…")
-                scope.launch {
-                    try {
-                        activeReader = CatalogService.stremioMetadata(provider, item)
-                    } catch (e: Exception) {
-                        val fallbackRequest = MediaCard(
-                            id = "stremio-stream-request:" + provider.id + ":" + item.externalId,
-                            title = "Find playable streams",
-                            subtitle = "Metadata was unavailable; ask the add-on for sources",
-                            category = item.category,
-                            providerName = provider.name,
-                            providerId = provider.id,
-                            externalKind = "stremio_stream",
-                            externalId = item.externalId,
-                            externalType = item.externalType
-                        )
-                        activeReader = item.copy(
-                            description = (item.description + "\n\nEpisode details were not supplied by this add-on. You can still ask it for streams below.").trim(),
-                            childItems = listOf(fallbackRequest)
-                        )
-                    }
+            val sourceProvider = providers.firstOrNull { it.id == item.providerId }
+            activeReader = item.copy(description = "Loading details from installed Stremio add-ons…")
+            scope.launch {
+                try {
+                    activeReader = CatalogService.stremioMetadata(providers, item)
+                } catch (e: Exception) {
+                    val fallbackRequest = MediaCard(
+                        id = "stremio-stream-request:" + item.providerId + ":" + item.externalId,
+                        title = "Find playable streams",
+                        subtitle = "Metadata unavailable; ask installed stream add-ons for sources",
+                        category = item.category,
+                        providerName = sourceProvider?.name ?: item.providerName,
+                        providerId = item.providerId,
+                        externalKind = "stremio_stream",
+                        externalId = item.externalId,
+                        externalType = item.externalType
+                    )
+                    activeReader = item.copy(
+                        description = (item.description + "\n\nEpisode details were not supplied by a metadata add-on. You can still ask all installed stream add-ons for sources below.").trim(),
+                        childItems = listOf(fallbackRequest)
+                    )
                 }
             }
             return
