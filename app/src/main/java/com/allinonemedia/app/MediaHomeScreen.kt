@@ -657,10 +657,10 @@ private fun DiscoverScreen(
         if (loading) {
             Column { repeat(3) { LoadingCard() } }
         } else if (category == "Shorts") {
-            val shorts = providerItems.filter {
+            val shorts = (results + providerItems.filter {
                 (it.category.equals("Shorts", true) || it.category.equals("All", true)) &&
                     (term.isBlank() || it.title.contains(term, true) || it.description.contains(term, true))
-            }
+            }).distinctBy { it.id }
             if (shorts.isEmpty()) {
                 Text("Your short-drama feed is ready for a source. Add a Shorts JSON feed, M3U playlist, or direct MP4/HLS link in Extensions, then tap Sync.", color = SoftText, fontSize = 12.sp)
             } else {
