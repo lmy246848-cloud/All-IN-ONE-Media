@@ -870,8 +870,13 @@ object CatalogService {
         val id = catalog.optString("id")
         if (type.isBlank() || id.isBlank()) return emptyList()
         val extraJson = catalog.optJSONArray("extra") ?: JSONArray()
-        val searchSupported = (0 until extraJson.length()).mapNotNull { extraJson.optJSONObject(it) }
-            .any { it.optString("name").equals("search", true) }
+        val searchSupported = (0 until extraJson.length()).any { index ->
+            when (val extraItem = extraJson.opt(index)) {
+                is JSONObject -> extraItem.optString("name").equals("search", true)
+                is String -> extraItem.equals("search", true)
+                else -> false
+            }
+        }
         if (search.isNotBlank() && !searchSupported) return emptyList()
         val extra = if (search.isNotBlank()) mapOf("search" to search) else emptyMap()
         val url = stremioResourceUrl(provider, "catalog", type, id, extra)
@@ -918,7 +923,7 @@ object CatalogService {
         if (term.isBlank()) return@withContext emptyList()
         val allowedTypes = stremioTypesForCategory(category)
         val results = mutableListOf<MediaCard>()
-        providers.filter { it.enabled && it.url.endsWith("/manifest.json", true) }.forEach { provider ->
+        providers.filter { it.enabled && it.url.substringBefore("?").substringBefore("#").endsWith("/manifest.json", true) }.forEach { provider ->
             try {
                 val response = requestDetailed(provider.url, headers = provider.headers)
                 val manifestJson = JSONObject(response.body)
@@ -927,7 +932,13 @@ object CatalogService {
                 manifest.catalogs.filter {
                     (allowedTypes.isEmpty() || it.optString("type").lowercase() in allowedTypes) &&
                         (it.optJSONArray("extra")?.let { a ->
-                            (0 until a.length()).any { i -> a.optJSONObject(i)?.optString("name")?.equals("search", true) == true }
+                            (0 until a.length()).any { i ->
+                                when (val extraItem = a.opt(i)) {
+                                    is JSONObject -> extraItem.optString("name").equals("search", true)
+                                    is String -> extraItem.equals("search", true)
+                                    else -> false
+                                }
+                            }
                         } ?: false)
                 }.take(6).forEach { catalog ->
                     runCatching { results += fetchStremioCatalog(provider, catalog, term.trim()) }
