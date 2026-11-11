@@ -1032,7 +1032,7 @@ private fun SettingsScreen(
             }
         }
         Spacer(Modifier.height(10.dp))
-        Text("All IN ONE Media • Version 0.4.1", color = secondary, fontSize = 11.sp)
+        Text("All IN ONE Media • Version 0.4.2", color = secondary, fontSize = 11.sp)
         Text("Your library, providers, and settings are stored locally on this device.", color = secondary, fontSize = 10.sp)
     }
 }
