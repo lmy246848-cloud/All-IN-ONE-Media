@@ -79,13 +79,13 @@ jobs:
         if: github.ref == 'refs/heads/scratch-rebuild'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v0.5.0-build-${{ github.run_number }}
-          name: All IN ONE Media v0.5.0 (build ${{ github.run_number }})
+          tag_name: v0.4.3-build-${{ github.run_number }}
+          name: All IN ONE Media v0.4.3 (build ${{ github.run_number }})
           body: |
-            All IN ONE Media v0.5.0.
+            All IN ONE Media v0.4.3.
             Adds a Stremio HTTP add-on client: detects manifest.json URLs, syncs catalogues, searches add-ons that declare the search extra, fetches metadata and episodes, requests stream options, and plays direct HTTPS streams.
             The app still does not execute Mihon/Komikku or Aniyomi APK extensions, CloudStream scripts, LNReader/Mangayomi packages, torrent/magnet streams, DRM or arbitrary external protocols. Those need separate compatible runtimes.
-            Application ID: com.allinonemedia.app.v050. This is a separate install from earlier builds because the CI signing key is temporary unless a stable keystore is configured.
+            Application ID: com.allinonemedia.app.v043. This is a separate install from earlier builds because the CI signing key is temporary unless a stable keystore is configured.
             Signing mode: ${{ steps.build.outputs.signing_mode }}.
             Configure KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS and KEY_PASSWORD repository Actions secrets for stable in-place updates in future releases.
           files: dist/All-IN-ONE-Media.apk
@@ -100,6 +100,6 @@ jobs:
       - name: Keep Actions artifact
         uses: actions/upload-artifact@v4
         with:
-          name: All-IN-ONE-Media-v0.5.0-APK
+          name: All-IN-ONE-Media-v0.4.3-APK
           path: dist/All-IN-ONE-Media.apk
           if-no-files-found: error
