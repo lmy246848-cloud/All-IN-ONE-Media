@@ -797,146 +797,193 @@ private fun ProviderManagerScreen(
     var appliedMessage by remember { mutableStateOf("") }
     val providerTypes = listOf("All", "Anime", "Donghua", "Movies", "Series", "Manga", "Manhwa", "Light Novels", "Shorts")
 
-    Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
-        Text("Extensions & Providers", color = foreground, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
-        Text("Add a compatible feed or media link, Sync it, then open a title to read or watch.", color = secondary, fontSize = 12.sp)
-        Spacer(Modifier.height(11.dp))
-        Card(
-            modifier = Modifier.fillMaxWidth().liquidGlass(RoundedCornerShape(22.dp)),
-            colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-            shape = RoundedCornerShape(22.dp)
-        ) {
-            Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Add extension / provider", color = foreground, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                OutlinedTextField(
-                    value = name, onValueChange = { name = it; error = ""; appliedMessage = "" },
-                    label = { Text("Extension name (optional)") },
-                    placeholder = { Text("e.g. Anime source") },
-                    modifier = Modifier.fillMaxWidth(), singleLine = true,
-                    shape = RoundedCornerShape(15.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        unfocusedContainerColor = Color.White.copy(alpha = 0.035f),
-                        focusedContainerColor = Color.White.copy(alpha = 0.075f),
-                        unfocusedBorderColor = Color.White.copy(alpha = 0.22f),
-                        focusedBorderColor = Purple.copy(alpha = 0.85f)
-                    )
-                )
-                Text("Content type", color = secondary, fontSize = 11.sp)
-                androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    items(providerTypes) { type ->
-                        FilterChip(selected = category == type, onClick = { category = type }, label = { Text(type, fontSize = 10.sp) })
-                    }
-                }
-                OutlinedTextField(
-                    value = url, onValueChange = { url = it; error = ""; appliedMessage = "" },
-                    label = { Text("Extension / provider link") },
-                    placeholder = { Text("https://example.com/source.json") },
-                    modifier = Modifier.fillMaxWidth(), singleLine = true,
-                    shape = RoundedCornerShape(15.dp)
-                )
+    // One LazyColumn owns the entire page. Keeping the editor and provider actions
+    // in the same scroll container prevents the fixed form from hiding Sync on short screens.
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(9.dp),
+        contentPadding = PaddingValues(top = 8.dp, bottom = 28.dp)
+    ) {
+        item {
+            Column {
+                Text("Extensions & Providers", color = foreground, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
                 Text(
-                    "Use an HTTPS JSON catalogue, M3U playlist, direct video URL, or website page. Mihon / Aniyomi / CloudStream plugin repository links are not compatible feed URLs. The name is optional.",
-                    color = secondary, fontSize = 10.sp
+                    "Add a compatible source, scroll to Your extensions, then press Sync to load its titles.",
+                    color = secondary, fontSize = 12.sp
                 )
-                OutlinedTextField(
-                    value = headersText,
-                    onValueChange = { headersText = it; error = ""; appliedMessage = "" },
-                    label = { Text("Advanced HTTP headers (optional JSON)") },
-                    placeholder = { Text("{\n  \"Referer\": \"https://example.org/\"\n}") },
-                    modifier = Modifier.fillMaxWidth(),
-                    minLines = 2,
-                    maxLines = 4,
-                    shape = RoundedCornerShape(15.dp)
-                )
-                Text("Only use headers provided by a source you trust. Header values are saved locally with this provider.", color = secondary, fontSize = 10.sp)
-                if (error.isNotBlank()) Text(error, color = Pink, fontSize = 11.sp)
-                if (appliedMessage.isNotBlank()) Text(appliedMessage, color = Aqua, fontSize = 11.sp)
-                Button(
-                    onClick = {
-                        val cleanUrl = url.trim()
-                        when {
-                            cleanUrl.isBlank() -> error = "Paste an extension or provider link first."
-                            !cleanUrl.startsWith("https://", true) -> error = "For security, use an HTTPS link."
-                            providers.any { it.url.equals(cleanUrl, true) } -> error = "This source is already added."
-                            else -> {
-                                val parsedHeaders = runCatching { CatalogService.parseHeadersJson(headersText) }
-                                if (parsedHeaders.isFailure) {
-                                    error = parsedHeaders.exceptionOrNull()?.message ?: "Request headers must be valid JSON."
-                                } else {
-                                    val automaticName = name.trim().ifBlank {
-                                        runCatching { android.net.Uri.parse(cleanUrl).host?.removePrefix("www.") }.getOrNull()
-                                            ?.takeIf { it.isNotBlank() } ?: "Provider " + (providers.size + 1)
+            }
+        }
+
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth().liquidGlass(RoundedCornerShape(22.dp)),
+                colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+                shape = RoundedCornerShape(22.dp)
+            ) {
+                Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("Add extension / provider", color = foreground, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    OutlinedTextField(
+                        value = name, onValueChange = { name = it; error = ""; appliedMessage = "" },
+                        label = { Text("Extension name (optional)") },
+                        placeholder = { Text("e.g. Anime source") },
+                        modifier = Modifier.fillMaxWidth(), singleLine = true,
+                        shape = RoundedCornerShape(15.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            unfocusedContainerColor = Color.White.copy(alpha = 0.035f),
+                            focusedContainerColor = Color.White.copy(alpha = 0.075f),
+                            unfocusedBorderColor = Color.White.copy(alpha = 0.22f),
+                            focusedBorderColor = Purple.copy(alpha = 0.85f)
+                        )
+                    )
+                    Text("Content type", color = secondary, fontSize = 11.sp)
+                    androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        items(providerTypes) { type ->
+                            FilterChip(selected = category == type, onClick = { category = type }, label = { Text(type, fontSize = 10.sp) })
+                        }
+                    }
+                    OutlinedTextField(
+                        value = url, onValueChange = { url = it; error = ""; appliedMessage = "" },
+                        label = { Text("Extension / provider link") },
+                        placeholder = { Text("https://example.com/source.json") },
+                        modifier = Modifier.fillMaxWidth(), singleLine = true,
+                        shape = RoundedCornerShape(15.dp)
+                    )
+                    Text(
+                        "Use an HTTPS JSON catalogue, RSS/Atom feed, M3U playlist, direct media URL, or website page. Mihon / Aniyomi / CloudStream plugin repository URLs still need their own compatible runtime.",
+                        color = secondary, fontSize = 10.sp
+                    )
+                    OutlinedTextField(
+                        value = headersText,
+                        onValueChange = { headersText = it; error = ""; appliedMessage = "" },
+                        label = { Text("Advanced HTTP headers (optional JSON)") },
+                        placeholder = { Text("{\n  \"Referer\": \"https://example.org/\"\n}") },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 2,
+                        maxLines = 4,
+                        shape = RoundedCornerShape(15.dp)
+                    )
+                    Text("Only use headers provided by a source you trust. Header values are saved locally with this provider.", color = secondary, fontSize = 10.sp)
+                    if (error.isNotBlank()) Text(error, color = Pink, fontSize = 11.sp)
+                    if (appliedMessage.isNotBlank()) Text(appliedMessage, color = Aqua, fontSize = 11.sp)
+                    Button(
+                        onClick = {
+                            val cleanUrl = url.trim()
+                            when {
+                                cleanUrl.isBlank() -> error = "Paste an extension or provider link first."
+                                !cleanUrl.startsWith("https://", true) -> error = "For security, use an HTTPS link."
+                                providers.any { it.url.equals(cleanUrl, true) } -> error = "This source is already added."
+                                else -> {
+                                    val parsedHeaders = runCatching { CatalogService.parseHeadersJson(headersText) }
+                                    if (parsedHeaders.isFailure) {
+                                        error = parsedHeaders.exceptionOrNull()?.message ?: "Request headers must be valid JSON."
+                                    } else {
+                                        val automaticName = name.trim().ifBlank {
+                                            runCatching { android.net.Uri.parse(cleanUrl).host?.removePrefix("www.") }.getOrNull()
+                                                ?.takeIf { it.isNotBlank() } ?: "Provider " + (providers.size + 1)
+                                        }
+                                        onAdd(MediaProvider(
+                                            System.currentTimeMillis().toString(), automaticName, category, cleanUrl,
+                                            headers = parsedHeaders.getOrDefault(emptyMap())
+                                        ))
+                                        appliedMessage = "$automaticName added. Scroll down to Your extensions and press Sync."
+                                        name = ""
+                                        url = ""
+                                        headersText = ""
                                     }
-                                    onAdd(MediaProvider(
-                                        System.currentTimeMillis().toString(), automaticName, category, cleanUrl,
-                                        headers = parsedHeaders.getOrDefault(emptyMap())
-                                    ))
-                                    appliedMessage = "$automaticName added. Tap Sync below to load its titles."
-                                    name = ""
-                                    url = ""
-                                    headersText = ""
                                 }
                             }
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth().height(50.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    enabled = url.isNotBlank()
-                ) {
-                    Icon(Icons.Filled.Extension, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Apply / Add extension", fontWeight = FontWeight.Bold)
+                        },
+                        modifier = Modifier.fillMaxWidth().height(50.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        enabled = url.isNotBlank()
+                    ) {
+                        Icon(Icons.Filled.Extension, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Apply / Add extension", fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         }
-        if (message.isNotBlank()) Text(message, color = if (message.startsWith("Could not load", true)) Pink else Aqua, fontSize = 11.sp, modifier = Modifier.padding(vertical = 8.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Your extensions (" + providers.size + ")", color = foreground, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-            Text("Sync, then tap Open / Read / Watch", color = secondary, fontSize = 10.sp)
+
+        if (message.isNotBlank()) {
+            item {
+                Text(
+                    message,
+                    color = if (message.startsWith("Could not load", true)) Pink else Aqua,
+                    fontSize = 11.sp,
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                )
+            }
         }
+
+        item {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Your extensions (" + providers.size + ")", color = foreground, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Text("Press Sync to load titles", color = secondary, fontSize = 10.sp)
+            }
+        }
+
         if (providers.isEmpty()) {
-            Text("No extensions added yet. Paste a source link above and press Apply / Add extension.", color = secondary, fontSize = 11.sp, modifier = Modifier.padding(vertical = 8.dp))
+            item {
+                Text(
+                    "No extensions added yet. Add a source above; it will appear here with its Sync button.",
+                    color = secondary, fontSize = 11.sp, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                )
+            }
         }
-        LazyColumn(
-            modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp),
-            contentPadding = PaddingValues(top = 8.dp, bottom = 16.dp)
-        ) {
-            items(providers, key = { it.id }) { provider ->
-                Card(
-                    modifier = Modifier.fillMaxWidth().liquidGlass(RoundedCornerShape(18.dp)),
-                    colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-                    shape = RoundedCornerShape(18.dp)
-                ) {
-                    Column(Modifier.fillMaxWidth().padding(13.dp)) {
-                        Text(provider.name, color = foreground, fontWeight = FontWeight.Bold)
-                        Text(
-                            provider.category + (if (provider.headers.isNotEmpty()) " • custom headers" else "") + " • " + provider.url,
-                            color = secondary, fontSize = 10.sp, maxLines = 2, overflow = TextOverflow.Ellipsis
-                        )
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Button(
-                                onClick = { onSync(provider) }, enabled = syncingId != provider.id,
-                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 7.dp)
-                            ) {
-                                if (syncingId == provider.id) CircularProgressIndicator(modifier = Modifier.size(15.dp), strokeWidth = 2.dp)
-                                else Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(Modifier.width(5.dp))
-                                Text(if (syncingId == provider.id) "Syncing…" else "Sync")
+
+        items(providers, key = { "provider-" + it.id }) { provider ->
+            Card(
+                modifier = Modifier.fillMaxWidth().liquidGlass(RoundedCornerShape(18.dp)),
+                colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+                shape = RoundedCornerShape(18.dp)
+            ) {
+                Column(Modifier.fillMaxWidth().padding(13.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    Text(provider.name, color = foreground, fontWeight = FontWeight.Bold)
+                    Text(
+                        provider.category + (if (provider.headers.isNotEmpty()) " • custom headers" else "") + " • " + provider.url,
+                        color = secondary, fontSize = 10.sp, maxLines = 2, overflow = TextOverflow.Ellipsis
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = { onSync(provider) },
+                            enabled = syncingId != provider.id,
+                            modifier = Modifier.weight(1f).heightIn(min = 46.dp),
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                        ) {
+                            if (syncingId == provider.id) {
+                                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                Spacer(Modifier.width(7.dp))
+                                Text("Syncing…")
+                            } else {
+                                Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.size(17.dp))
+                                Spacer(Modifier.width(7.dp))
+                                Text("Sync")
                             }
-                            Spacer(Modifier.width(8.dp))
-                            TextButton(onClick = { onRemove(provider) }) {
-                                Icon(Icons.Filled.Delete, contentDescription = null, tint = Pink, modifier = Modifier.size(16.dp))
-                                Text("Remove", color = Pink)
-                            }
+                        }
+                        TextButton(onClick = { onRemove(provider) }, modifier = Modifier.heightIn(min = 46.dp)) {
+                            Icon(Icons.Filled.Delete, contentDescription = null, tint = Pink, modifier = Modifier.size(16.dp))
+                            Text("Remove", color = Pink)
                         }
                     }
                 }
             }
-            if (sourceItems.isNotEmpty()) {
-                item { Text("Loaded titles (" + sourceItems.size + ")", color = foreground, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 10.dp)) }
-                items(sourceItems, key = { "source-" + it.id }) { item ->
-                    MediaCardRow(item, libraryIds.contains(item.id), onSave, onOpen, onPlay, onDownload)
-                }
+        }
+
+        if (sourceItems.isNotEmpty()) {
+            item {
+                Text(
+                    "Loaded titles (" + sourceItems.size + ")",
+                    color = foreground, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                )
+            }
+            items(sourceItems, key = { "source-" + it.id }) { item ->
+                MediaCardRow(item, libraryIds.contains(item.id), onSave, onOpen, onPlay, onDownload)
             }
         }
     }
