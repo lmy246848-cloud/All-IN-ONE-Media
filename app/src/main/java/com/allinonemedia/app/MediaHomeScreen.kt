@@ -210,21 +210,21 @@ fun AllInOneApp() {
 
     fun openChild(item: MediaCard) {
         if (item.externalKind == "stremio_stream") {
-            val provider = providers.firstOrNull { it.id == item.providerId }
-            if (provider == null) {
-                activeReader = item.copy(description = "The add-on that supplied this episode is no longer installed.")
+            val streamAddons = providers.filter { it.enabled && it.url.substringBefore("?").substringBefore("#").endsWith("/manifest.json", true) }
+            if (streamAddons.isEmpty()) {
+                activeReader = item.copy(description = "No Stremio add-ons are installed. Add a Stremio catalogue add-on and a stream add-on that exposes the stream resource.")
             } else {
-                activeReader = item.copy(description = "Requesting playable sources from " + provider.name + "…")
+                activeReader = item.copy(description = "Requesting sources from " + streamAddons.size + " installed Stremio add-on(s)…")
                 scope.launch {
                     try {
-                        val streams = CatalogService.stremioStreams(provider, item)
+                        val streams = CatalogService.stremioStreams(streamAddons, item)
                         activeReader = item.copy(
-                            subtitle = "Available sources • " + provider.name,
-                            description = "Choose a stream below. Unsupported torrent, DRM or external-only entries are not playable in this app.",
+                            subtitle = "Available sources • " + streams.map { it.providerName }.distinct().joinToString(", "),
+                            description = "Choose a source below. All installed Stremio stream add-ons were checked for this title.",
                             childItems = streams
                         )
                     } catch (e: Exception) {
-                        activeReader = item.copy(description = e.message ?: "This add-on returned no playable sources.")
+                        activeReader = item.copy(description = e.message ?: "No installed add-on returned a playable source.")
                     }
                 }
             }
