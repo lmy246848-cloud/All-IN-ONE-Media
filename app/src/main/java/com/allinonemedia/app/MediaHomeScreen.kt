@@ -146,6 +146,22 @@ fun AllInOneApp() {
     }
 
     fun openItem(item: MediaCard) {
+        if (item.externalKind == "stremio_meta") {
+            val provider = providers.firstOrNull { it.id == item.providerId }
+            if (provider == null) {
+                activeReader = item.copy(description = "The Stremio add-on that supplied this item is no longer installed. Re-add its manifest URL and sync again.")
+            } else {
+                activeReader = item.copy(description = "Loading details and episode list from " + provider.name + "…")
+                scope.launch {
+                    try {
+                        activeReader = CatalogService.stremioMetadata(provider, item)
+                    } catch (e: Exception) {
+                        activeReader = item.copy(description = (item.description + "\n\nCould not load add-on metadata: " + (e.message ?: "network error")).trim())
+                    }
+                }
+            }
+            return
+        }
         when {
             item.id.startsWith("mangadex-") -> activeManga = item
             item.textUrl.isNotBlank() -> scope.launch {
@@ -179,6 +195,27 @@ fun AllInOneApp() {
     }
 
     fun openChild(item: MediaCard) {
+        if (item.externalKind == "stremio_stream") {
+            val provider = providers.firstOrNull { it.id == item.providerId }
+            if (provider == null) {
+                activeReader = item.copy(description = "The add-on that supplied this episode is no longer installed.")
+            } else {
+                activeReader = item.copy(description = "Requesting playable sources from " + provider.name + "…")
+                scope.launch {
+                    try {
+                        val streams = CatalogService.stremioStreams(provider, item)
+                        activeReader = item.copy(
+                            subtitle = "Available sources • " + provider.name,
+                            description = "Choose a stream below. Unsupported torrent, DRM or external-only entries are not playable in this app.",
+                            childItems = streams
+                        )
+                    } catch (e: Exception) {
+                        activeReader = item.copy(description = e.message ?: "This add-on returned no playable sources.")
+                    }
+                }
+            }
+            return
+        }
         when {
             item.streamUrl.isNotBlank() -> activeVideo = item
             item.id.startsWith("mangadex-") || item.textUrl.isNotBlank() || item.pages.isNotEmpty() || item.textContent.isNotBlank() -> openItem(item)
@@ -329,7 +366,7 @@ fun AllInOneApp() {
                             onPlay = { activeVideo = it }, onDownload = { downloadMedia(context, it) }
                         )
                         "Discover" -> DiscoverScreen(
-                            initialCategory = discoverCategory, providerItems = sourceItems, tmdbKey = tmdbKey,
+                            initialCategory = discoverCategory, providerItems = sourceItems, providers = providers, tmdbKey = tmdbKey,
                             libraryIds = library.map { it.id }.toSet(),
                             onSave = { toggleLibrary(it) }, onOpen = { openItem(it) },
                             onPlay = { activeVideo = it }, onDownload = { downloadMedia(context, it) }
@@ -553,7 +590,7 @@ private fun CategoryTile(
 
 @Composable
 private fun DiscoverScreen(
-    initialCategory: String, providerItems: List<MediaCard>, tmdbKey: String, libraryIds: Set<String>,
+    initialCategory: String, providerItems: List<MediaCard>, providers: List<MediaProvider>, tmdbKey: String, libraryIds: Set<String>,
     onSave: (MediaCard) -> Unit, onOpen: (MediaCard) -> Unit,
     onPlay: (MediaCard) -> Unit, onDownload: (MediaCard) -> Unit
 ) {
@@ -581,8 +618,16 @@ private fun DiscoverScreen(
                         message = "Searching " + category + "…"
                         scope.launch {
                             try {
-                                results = CatalogService.search(category, term.trim(), tmdbKey)
-                                message = "Found " + results.size + " results."
+                                val builtIn = runCatching { CatalogService.search(category, term.trim(), tmdbKey) }
+                                val addOnResults = CatalogService.searchStremioProviders(providers, category, term.trim())
+                                results = (builtIn.getOrDefault(emptyList()) + addOnResults).distinctBy { it.id }
+                                message = if (results.isNotEmpty()) {
+                                    "Found " + results.size + " results (built-in catalogue + compatible add-ons)."
+                                } else {
+                                    val detail = builtIn.exceptionOrNull()?.message
+                                    if (!detail.isNullOrBlank()) detail
+                                    else "No results. Make sure the installed add-on has a searchable catalogue for " + category + "."
+                                }
                             } catch (e: Exception) {
                                 results = emptyList()
                                 message = e.message ?: "Search failed. Check your connection."
