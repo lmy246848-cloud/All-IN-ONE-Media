@@ -156,7 +156,21 @@ fun AllInOneApp() {
                     try {
                         activeReader = CatalogService.stremioMetadata(provider, item)
                     } catch (e: Exception) {
-                        activeReader = item.copy(description = (item.description + "\n\nCould not load add-on metadata: " + (e.message ?: "network error")).trim())
+                        val fallbackRequest = MediaCard(
+                            id = "stremio-stream-request:" + provider.id + ":" + item.externalId,
+                            title = "Find playable streams",
+                            subtitle = "Metadata was unavailable; ask the add-on for sources",
+                            category = item.category,
+                            providerName = provider.name,
+                            providerId = provider.id,
+                            externalKind = "stremio_stream",
+                            externalId = item.externalId,
+                            externalType = item.externalType
+                        )
+                        activeReader = item.copy(
+                            description = (item.description + "\n\nEpisode details were not supplied by this add-on. You can still ask it for streams below.").trim(),
+                            childItems = listOf(fallbackRequest)
+                        )
                     }
                 }
             }
@@ -894,7 +908,7 @@ private fun ProviderManagerScreen(
                         shape = RoundedCornerShape(15.dp)
                     )
                     Text(
-                        "Use an HTTPS JSON catalogue, RSS/Atom feed, M3U playlist, direct media URL, or website page. Mihon / Aniyomi / CloudStream plugin repository URLs still need their own compatible runtime.",
+                        "Supported: HTTPS JSON/RSS/Atom feeds, M3U, direct media URLs, websites, and Stremio add-ons (paste the full HTTPS manifest.json URL). Mihon / Aniyomi APKs and CloudStream scripts still require separate runtimes.",
                         color = secondary, fontSize = 10.sp
                     )
                     OutlinedTextField(
