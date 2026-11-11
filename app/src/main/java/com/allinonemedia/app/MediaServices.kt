@@ -1004,6 +1004,30 @@ object CatalogService {
         )
     }
 
+    suspend fun stremioMetadata(providers: List<MediaProvider>, item: MediaCard): MediaCard = withContext(Dispatchers.IO) {
+        val ordered = providers.filter { it.enabled && it.url.substringBefore("?").substringBefore("#").endsWith("/manifest.json", true) }
+            .sortedBy { if (it.id == item.providerId) 0 else 1 }
+        var lastError = ""
+        for (provider in ordered) {
+            try {
+                val manifestJson = JSONObject(requestDetailed(provider.url, headers = provider.headers).body)
+                if (!isStremioManifest(manifestJson)) continue
+                val manifest = parseStremioManifest(manifestJson)
+                if ("meta" !in manifest.resources) continue
+                if (manifest.types.isNotEmpty() && item.externalType.lowercase() !in manifest.types) continue
+                val prefixes = manifestJson.optJSONArray("idPrefixes")
+                if (prefixes != null && prefixes.length() > 0 &&
+                    (0 until prefixes.length()).none { item.externalId.startsWith(prefixes.optString(it)) }) continue
+                return@withContext stremioMetadata(provider, item)
+            } catch (e: Exception) {
+                lastError = e.message ?: "metadata request failed"
+            }
+        }
+        throw IllegalStateException(
+            "No installed Stremio add-on returned metadata for this title. The app can still ask stream add-ons for the title ID. " + lastError.take(150)
+        )
+    }
+
     suspend fun stremioStreams(providers: List<MediaProvider>, item: MediaCard): List<MediaCard> = withContext(Dispatchers.IO) {
         require(item.externalKind == "stremio_stream" && item.externalId.isNotBlank() && item.externalType.isNotBlank()) {
             "This item is not a Stremio video request."
