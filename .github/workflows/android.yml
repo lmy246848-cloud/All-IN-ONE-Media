@@ -8,8 +8,9 @@ permissions:
   contents: write
 
 concurrency:
-  group: all-in-one-media-android-build
-  cancel-in-progress: true
+  # Give each release build its own slot so a stale queued run cannot block the APK.
+  group: all-in-one-media-android-build-${{ github.run_id }}
+  cancel-in-progress: false
 
 jobs:
   build:
