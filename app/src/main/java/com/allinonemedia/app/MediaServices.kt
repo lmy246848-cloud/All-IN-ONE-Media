@@ -888,7 +888,7 @@ object CatalogService {
         val metas = root.optJSONArray("metas")
             ?: root.optJSONObject("result")?.optJSONArray("metas")
             ?: JSONArray()
-        (0 until metas.length()).mapNotNull { index ->
+        return (0 until metas.length()).mapNotNull { index ->
             stremioCard(metas.optJSONObject(index) ?: return@mapNotNull null, provider, type)
         }
     }
