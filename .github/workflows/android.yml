@@ -83,12 +83,11 @@ jobs:
           name: All IN ONE Media v0.4.2 (build ${{ github.run_number }})
           body: |
             All IN ONE Media v0.4.2.
-                        Fixes the Extensions screen on short phone displays: the entire page now uses one scrollable list, keeping the add form, saved providers, Sync buttons, and loaded titles reachable. Provider rows have a full-width Sync button with a minimum touch height.
-                        Also includes the v0.4.1 provider parsing and playback improvements.
-                        Application ID: com.allinonemedia.app.v042. This installs separately from earlier builds because the CI signing key is temporary and not stable between runs.
-                        Signing mode: ${{ steps.build.outputs.signing_mode }}.
-                        Configure KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS and KEY_PASSWORD repository Actions secrets for stable in-place updates in future releases.
-
+            Fixes the Extensions screen on short phone displays: the entire page now uses one scrollable list, keeping the add form, saved providers, Sync buttons, and loaded titles reachable. Provider rows have a full-width Sync button with a minimum touch height.
+            Also includes the v0.4.1 provider parsing and playback improvements.
+            Application ID: com.allinonemedia.app.v042. This installs separately from earlier builds because the CI signing key is temporary and not stable between runs.
+            Signing mode: ${{ steps.build.outputs.signing_mode }}.
+            Configure KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS and KEY_PASSWORD repository Actions secrets for stable in-place updates in future releases.
           files: dist/All-IN-ONE-Media.apk
           make_latest: true
           draft: false
