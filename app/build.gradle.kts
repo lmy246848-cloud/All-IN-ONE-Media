@@ -10,11 +10,11 @@ android {
     defaultConfig {
         // Separate install identity: the older build used an unrecoverable temporary
         // CI debug key, so Android cannot accept this APK as an in-place update.
-        applicationId = "com.allinonemedia.app.v041"
+        applicationId = "com.allinonemedia.app.v042"
         minSdk = 26
         targetSdk = 35
-        versionCode = 8
-        versionName = "0.4.1"
+        versionCode = 9
+        versionName = "0.4.2"
     }
     signingConfigs {
         create("release") {
