@@ -11,6 +11,17 @@ A provider is a **data feed or media endpoint**, not an executable extension pac
 - Direct HTTPS video/audio URLs: MP4, M4V, WebM, HLS/M3U8, DASH/MPD, MP3, M4A, AAC, OGG/OGA, Opus, and WAV. A direct endpoint without a file extension can be detected using its HTTP content type.
 - Website pages: HTTPS detail, reading, or streaming pages open in the app's embedded browser. Some sites may block embedded browsers or require a sign-in/captcha.
 
+## Stremio HTTP add-ons
+
+Paste the full HTTPS `manifest.json` URL into Extensions (for example, `https://addon.example/manifest.json`), press **Apply / Add extension**, and then press **Sync**. The app reads the add-on manifest and requests the declared catalogue resources.
+
+- `GET /manifest.json`: detects the add-on name, resources, types, catalogues and extra search properties.
+- `GET /catalog/{type}/{id}.json`: loads the catalogue. Discover search calls catalogues that declare an `extra` item named `search`, using the protocol's extra-argument path segment.
+- `GET /meta/{type}/{id}.json`: loads title details and episode/video identifiers.
+- `GET /stream/{type}/{videoId}.json`: loads source options. Direct HTTPS stream URLs are passed to the built-in Media3 player; HTTPS external URLs open in the in-app browser. Request headers in `behaviorHints.proxyHeaders.request` are carried to playback.
+
+This implementation currently supports HTTP(S) add-ons that expose catalogues and direct HTTPS stream URLs. It does not resolve torrent/magnet sources, DRM streams, arbitrary external protocols, or add-ons which expose streams only and require a content ID from a separate source. Subtitles resources are not implemented yet. A catalogue search only works when that specific catalogue declares the `search` extra property.
+
 ## Nested episode and chapter feeds
 
 A title can contain its own `episodes`, `chapters`, `children`, or `parts` array. Each child can provide a direct `streamUrl`, `pages`, `content`, `textUrl`, or `pageUrl`.
@@ -127,6 +138,6 @@ A novel chapter can provide inline text or a plain-text URL:
 
 ## Unsupported extension runtimes
 
-This version does **not** execute or install Mihon/Komikku, Aniyomi, CloudStream, LNReader, Mangayomi, APK, DEX, JavaScript, or arbitrary extension packages. Their extensions use different runtime APIs. A repository index from one of those apps is not a catalogue feed. Use an All IN ONE Media JSON feed, M3U playlist, direct stream URL, or website URL instead.
+This version implements the Stremio HTTP add-on protocol. It does **not** execute or install Mihon/Komikku or Aniyomi APK extensions, CloudStream Kotlin-script plugins, LNReader/Mangayomi plugins, APK/DEX packages, or arbitrary JavaScript extension runtimes. Their source APIs and execution models need separate adapters/runtimes. Their extensions use different runtime APIs. A repository index from one of those apps is not a catalogue feed. Use an All IN ONE Media JSON feed, M3U playlist, direct stream URL, or website URL instead.
 
 All source URLs must use HTTPS. Only use sources and content you are authorised to access. The app does not bypass logins, paywalls, DRM, geographic restrictions, or other access controls.
