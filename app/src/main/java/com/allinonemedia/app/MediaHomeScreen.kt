@@ -108,6 +108,8 @@ fun AllInOneApp() {
     val surface = if (darkTheme) Panel else Color(0xFFFCFAF5)
     val foreground = if (darkTheme) Color(0xFFF4F2E9) else Color(0xFF20241F)
     val secondary = if (darkTheme) SoftText else Color(0xFF676D65)
+    val enabledProviderIds = providers.filter { it.enabled }.map { it.id }.toSet()
+    val activeSourceItems = sourceItems.filter { it.providerId.isBlank() || it.providerId in enabledProviderIds }
 
     fun toggleLibrary(item: MediaCard) {
         val updated = if (library.any { it.id == item.id }) library.filterNot { it.id == item.id } else listOf(item) + library
@@ -324,7 +326,7 @@ fun AllInOneApp() {
                 AnimatedContent(targetState = page, label = "main-pages") { destination ->
                     when (destination) {
                         "Home" -> HomeScreen(
-                            foreground, secondary, surface, library, sourceItems,
+                            foreground, secondary, surface, library, activeSourceItems,
                             onCategory = { category ->
                                 discoverCategory = category
                                 page = if (category in listOf("Manga", "Manhwa", "Light Novels")) "Read" else "Watch"
@@ -339,13 +341,13 @@ fun AllInOneApp() {
                                 "Read" -> discoverCategory.takeIf { it in listOf("Manga", "Manhwa", "Light Novels") } ?: "Manga"
                                 else -> discoverCategory
                             },
-                            providerItems = sourceItems, providers = providers, tmdbKey = tmdbKey,
+                            providerItems = activeSourceItems, providers = providers, tmdbKey = tmdbKey,
                             libraryIds = library.map { it.id }.toSet(),
                             onSave = { toggleLibrary(it) }, onOpen = { openItem(it) },
                             onPlay = { activeVideo = it }, onDownload = { downloadMedia(context, it) }
                         )
                         "Player" -> PlayerScreen(
-                            availableItems = (sourceItems + library).distinctBy { it.id },
+                            availableItems = (activeSourceItems + library).distinctBy { it.id },
                             onPlay = { activeVideo = it }
                         )
                         "Library" -> LibraryScreen(
@@ -422,19 +424,19 @@ private fun SplashScreen() {
         animationSpec = infiniteRepeatable(tween(2200, easing = LinearEasing)), label = "rotation"
     )
     Box(
-        Modifier.fillMaxSize().background(Brush.linearGradient(listOf(Color(0xFF090511), Color(0xFF21103A), Color(0xFF090812)))),
+        Modifier.fillMaxSize().background(Night),
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Box(
                 Modifier.size(116.dp).graphicsLayer { rotationZ = rotation.value }
-                    .border(3.dp, Brush.sweepGradient(listOf(Purple, Pink, Aqua, Purple)), CircleShape)
-                    .padding(9.dp).border(1.dp, Purple.copy(alpha = 0.55f), CircleShape),
+                    .border(2.dp, Purple, CircleShape)
+                    .padding(9.dp).border(1.dp, Aqua.copy(alpha = 0.65f), CircleShape),
                 contentAlignment = Alignment.Center
             ) { Text("A", color = Color.White, fontSize = 62.sp, fontWeight = FontWeight.Black) }
             Spacer(Modifier.height(24.dp))
             Text("ALL IN ONE", color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 3.sp)
-            Text("MEDIA", color = Purple, fontSize = 21.sp, fontWeight = FontWeight.Bold, letterSpacing = 6.sp)
+            Text("MEDIA", color = Aqua, fontSize = 21.sp, fontWeight = FontWeight.Bold, letterSpacing = 6.sp)
             Spacer(Modifier.height(12.dp))
             Text("Watch  •  Read  •  Explore", color = SoftText, fontSize = 13.sp)
             Spacer(Modifier.height(28.dp))
