@@ -1,6 +1,6 @@
-# Provider format — All IN ONE Media 0.4.1
+# Provider format — All IN ONE Media 0.5.0
 
-A provider is a **data feed or media endpoint**, not an executable extension package. Add its HTTPS URL in **Extensions**, choose the category, press **Apply / Add extension**, then press **Sync**. Open a title, choose an episode or chapter when provided, and use the in-app reader, player, or website view.
+A provider is a **data feed or media endpoint**, not an executable extension package. Add its HTTPS URL in **Extensions**, choose the category, press **Apply / Add extension**, then press **Test & Sync**. Open a title, choose an episode or chapter when provided, and use the in-app reader, player, or website view.
 
 ## Supported source types
 
@@ -13,7 +13,7 @@ A provider is a **data feed or media endpoint**, not an executable extension pac
 
 ## Stremio HTTP add-ons
 
-Paste the full HTTPS `manifest.json` URL into Extensions (for example, `https://addon.example/manifest.json`), press **Apply / Add extension**, and then press **Sync**. The app reads the add-on manifest and requests the declared catalogue resources.
+Paste the full HTTPS `manifest.json` URL into Extensions (for example, `https://addon.example/manifest.json`), press **Apply / Add extension**, and then press **Test & Sync**. The app reads the add-on manifest and requests the declared catalogue resources.
 
 - `GET /manifest.json`: detects the add-on name, resources, types, catalogues and extra search properties.
 - `GET /catalog/{type}/{id}.json`: loads the catalogue. Discover search calls catalogues that declare an `extra` item named `search`, using the protocol's extra-argument path segment.
