@@ -70,38 +70,17 @@ import coil.compose.AsyncImage
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-private val Night = Color(0xFF090812)
-private val Panel = Color(0x6618152B)
-private val PanelRaised = Color(0x96271D40)
-private val Purple = Color(0xFFB58CFF)
-private val Pink = Color(0xFFFF78D2)
-private val Aqua = Color(0xFF64E6DB)
-private val SoftText = Color(0xFFB8B1C8)
+private val Night = Color(0xFF0B0D0E)
+private val Panel = Color(0xFF171B1B)
+private val PanelRaised = Color(0xFF232A27)
+private val Purple = Color(0xFFFF785F)
+private val Pink = Color(0xFFF0B35D)
+private val Aqua = Color(0xFFD9F27A)
+private val SoftText = Color(0xFFA5ADA7)
 private val categories = listOf("Anime", "Donghua", "Movies", "Series", "Manga", "Manhwa", "Light Novels", "Shorts")
 
 private fun Modifier.liquidGlass(shape: RoundedCornerShape = RoundedCornerShape(18.dp)): Modifier =
-    this.clip(shape)
-        .background(
-            Brush.linearGradient(
-                listOf(
-                    Color.White.copy(alpha = 0.15f),
-                    Color.White.copy(alpha = 0.045f),
-                    Purple.copy(alpha = 0.075f)
-                )
-            ),
-            shape
-        )
-        .border(
-            1.dp,
-            Brush.linearGradient(
-                listOf(
-                    Color.White.copy(alpha = 0.40f),
-                    Color.White.copy(alpha = 0.09f),
-                    Aqua.copy(alpha = 0.17f)
-                )
-            ),
-            shape
-        )
+    this.clip(shape).background(Panel, shape).border(1.dp, Color(0xFF303936), shape)
 
 @Composable
 fun AllInOneApp() {
@@ -125,10 +104,10 @@ fun AllInOneApp() {
 
     LaunchedEffect(Unit) { delay(1250); showSplash = false }
 
-    val background = if (darkTheme) Color(0xFF080713) else Color(0xFFF0ECF8)
-    val surface = if (darkTheme) Panel else Color(0x99FFFFFF)
-    val foreground = if (darkTheme) Color.White else Color(0xFF211A30)
-    val secondary = if (darkTheme) SoftText else Color(0xFF665D73)
+    val background = if (darkTheme) Night else Color(0xFFF3F1EA)
+    val surface = if (darkTheme) Panel else Color(0xFFFCFAF5)
+    val foreground = if (darkTheme) Color(0xFFF4F2E9) else Color(0xFF20241F)
+    val secondary = if (darkTheme) SoftText else Color(0xFF676D65)
 
     fun toggleLibrary(item: MediaCard) {
         val updated = if (library.any { it.id == item.id }) library.filterNot { it.id == item.id } else listOf(item) + library
@@ -287,33 +266,39 @@ fun AllInOneApp() {
     MaterialTheme(
         colorScheme = if (darkTheme) darkColorScheme(
             primary = Purple, secondary = Aqua, background = Night, surface = Panel,
-            onPrimary = Night, onBackground = Color.White, onSurface = Color.White
-        ) else lightColorScheme(primary = Color(0xFF7143B8), secondary = Color(0xFF168F87))
+            onPrimary = Night, onBackground = Color(0xFFF4F2E9), onSurface = Color(0xFFF4F2E9)
+        ) else lightColorScheme(
+            primary = Color(0xFFC94F38), secondary = Color(0xFF687C27),
+            background = Color(0xFFF3F1EA), surface = Color(0xFFFCFAF5),
+            onBackground = Color(0xFF20241F), onSurface = Color(0xFF20241F)
+        )
     ) {
         Scaffold(
             containerColor = Color.Transparent,
             bottomBar = {
                 NavigationBar(
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
-                        .clip(RoundedCornerShape(24.dp))
-                        .border(1.dp, Color.White.copy(alpha = 0.22f), RoundedCornerShape(24.dp)),
-                    containerColor = surface.copy(alpha = 0.62f), tonalElevation = 0.dp
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp).clip(RoundedCornerShape(22.dp)).border(1.dp, Color(0xFF303936), RoundedCornerShape(22.dp)),
+                    containerColor = surface, tonalElevation = 0.dp
                 ) {
-                    listOf("Home", "Discover", "Library", "Extensions", "Settings").forEach { tab ->
+                    listOf("Home", "Watch", "Player", "Read", "Library").forEach { tab ->
                         val icon = when (tab) {
                             "Home" -> Icons.Filled.Home
-                            "Discover" -> Icons.Filled.Explore
-                            "Library" -> Icons.Filled.Bookmark
-                            "Extensions" -> Icons.Filled.Extension
-                            else -> Icons.Filled.Settings
+                            "Watch" -> Icons.Filled.PlayArrow
+                            "Player" -> Icons.Filled.Movie
+                            "Read" -> Icons.Filled.MenuBook
+                            else -> Icons.Filled.Bookmark
                         }
                         NavigationBarItem(
-                            selected = page == tab, onClick = { page = tab },
+                            selected = page == tab, onClick = {
+                                page = tab
+                                if (tab == "Watch") discoverCategory = "Anime"
+                                if (tab == "Read") discoverCategory = "Manga"
+                            },
                             icon = { Icon(icon, contentDescription = tab) },
                             label = { Text(tab, fontSize = 10.sp) },
                             colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = Purple, selectedTextColor = Purple,
-                                indicatorColor = if (darkTheme) PanelRaised else Color(0xFFEFE5FF),
+                                selectedIconColor = Purple, selectedTextColor = foreground,
+                                indicatorColor = if (darkTheme) PanelRaised else Color(0xFFE7E9D8),
                                 unselectedIconColor = secondary, unselectedTextColor = secondary
                             )
                         )
@@ -322,64 +307,46 @@ fun AllInOneApp() {
             }
         ) { insets ->
             Column(
-                Modifier.fillMaxSize()
-                    .background(Brush.linearGradient(listOf(background, if (darkTheme) Color(0xFF1C1230) else Color(0xFFE6DDF4), background)))
-                    .drawBehind {
-                        val glowRadius = size.minDimension * 0.58f
-                        val upperGlowCenter = Offset(size.width * 0.10f, size.height * 0.14f)
-                        val lowerGlowCenter = Offset(size.width * 0.92f, size.height * 0.72f)
-                        drawCircle(
-                            brush = Brush.radialGradient(
-                                listOf(Purple.copy(alpha = if (darkTheme) 0.20f else 0.11f), Color.Transparent),
-                                center = upperGlowCenter,
-                                radius = glowRadius
-                            ),
-                            radius = glowRadius,
-                            center = upperGlowCenter
-                        )
-                        drawCircle(
-                            brush = Brush.radialGradient(
-                                listOf(Aqua.copy(alpha = if (darkTheme) 0.12f else 0.07f), Color.Transparent),
-                                center = lowerGlowCenter,
-                                radius = glowRadius * 0.82f
-                            ),
-                            radius = glowRadius * 0.82f,
-                            center = lowerGlowCenter
-                        )
-                    }
-                    .padding(insets)
+                Modifier.fillMaxSize().background(background).padding(insets)
             ) {
-                Row(
-                    Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, top = 14.dp, bottom = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        Modifier.size(38.dp).clip(RoundedCornerShape(13.dp))
-                            .background(Brush.linearGradient(listOf(Purple, Pink, Color(0xFF6332D8))))
-                            .border(1.dp, Color.White.copy(alpha = 0.42f), RoundedCornerShape(13.dp)),
-                        contentAlignment = Alignment.Center
-                    ) { Text("A", color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Black) }
-                    Spacer(Modifier.width(10.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text("ALL IN ONE", color = foreground, fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.4.sp)
-                        Text("Media", color = Purple, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 14.dp, top = 13.dp, bottom = 11.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(Purple), contentAlignment = Alignment.Center) {
+                        Text("A", color = Night, fontSize = 25.sp, fontWeight = FontWeight.Black)
                     }
-                    if (page == "Discover") Icon(Icons.Filled.Search, contentDescription = null, tint = secondary)
+                    Spacer(Modifier.width(11.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("ALL IN ONE", color = foreground, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.5.sp)
+                        Text("WATCH  •  READ  •  LISTEN", color = secondary, fontSize = 9.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.sp)
+                    }
+                    IconButton(onClick = { page = "Extensions" }) { Icon(Icons.Filled.Extension, contentDescription = "Sources", tint = secondary) }
+                    IconButton(onClick = { page = "Settings" }) { Icon(Icons.Filled.Settings, contentDescription = "Settings", tint = secondary) }
                 }
                 AnimatedContent(targetState = page, label = "main-pages") { destination ->
                     when (destination) {
                         "Home" -> HomeScreen(
                             foreground, secondary, surface, library, sourceItems,
-                            onCategory = { category -> discoverCategory = category; page = "Discover" },
-                            onDiscover = { page = "Discover" }, onLibrary = { page = "Library" },
+                            onCategory = { category ->
+                                discoverCategory = category
+                                page = if (category in listOf("Manga", "Manhwa", "Light Novels")) "Read" else "Watch"
+                            },
+                            onDiscover = { discoverCategory = "Anime"; page = "Watch" }, onLibrary = { page = "Library" },
                             onSave = { toggleLibrary(it) }, onOpen = { openItem(it) },
                             onPlay = { activeVideo = it }, onDownload = { downloadMedia(context, it) }
                         )
-                        "Discover" -> DiscoverScreen(
-                            initialCategory = discoverCategory, providerItems = sourceItems, providers = providers, tmdbKey = tmdbKey,
+                        "Discover", "Watch", "Read" -> DiscoverScreen(
+                            initialCategory = when (destination) {
+                                "Watch" -> discoverCategory.takeIf { it in listOf("Anime", "Donghua", "Movies", "Series", "Shorts") } ?: "Anime"
+                                "Read" -> discoverCategory.takeIf { it in listOf("Manga", "Manhwa", "Light Novels") } ?: "Manga"
+                                else -> discoverCategory
+                            },
+                            providerItems = sourceItems, providers = providers, tmdbKey = tmdbKey,
                             libraryIds = library.map { it.id }.toSet(),
                             onSave = { toggleLibrary(it) }, onOpen = { openItem(it) },
                             onPlay = { activeVideo = it }, onDownload = { downloadMedia(context, it) }
+                        )
+                        "Player" -> PlayerScreen(
+                            availableItems = (sourceItems + library).distinctBy { it.id },
+                            onPlay = { activeVideo = it }
                         )
                         "Library" -> LibraryScreen(
                             savedItems = library, foreground = foreground, secondary = secondary,
@@ -400,7 +367,13 @@ fun AllInOneApp() {
                                 sourceItems = sourceItems.filterNot { it.providerId == provider.id || (it.providerId.isBlank() && it.providerName == provider.name) }
                                 store.saveSourceItems(sourceItems)
                             },
-                            onSync = { syncProvider(it) }, onOpen = { openItem(it) },
+                            onSync = { syncProvider(it) },
+                            onToggle = { target ->
+                                val updated = providers.map { if (it.id == target.id) it.copy(enabled = !it.enabled) else it }
+                                providers = updated
+                                store.saveProviders(updated)
+                            },
+                            onOpen = { openItem(it) },
                             onPlay = { activeVideo = it }, onDownload = { downloadMedia(context, it) },
                             libraryIds = library.map { it.id }.toSet(), onSave = { toggleLibrary(it) }
                         )
@@ -487,17 +460,17 @@ private fun HomeScreen(
         item {
             Box(
                 Modifier.fillMaxWidth().clip(RoundedCornerShape(25.dp))
-                    .background(Brush.linearGradient(listOf(Color(0xCC472080), Color(0xB3201338), Color(0xA6111020))))
+                    .background(Color(0xFF202723))
                     .border(1.dp, Brush.linearGradient(listOf(Color.White.copy(alpha = 0.42f), Color.White.copy(alpha = 0.06f), Aqua.copy(alpha = 0.15f))), RoundedCornerShape(25.dp))
                     .padding(20.dp)
             ) {
                 Column {
-                    Text("YOUR ENTERTAINMENT HUB", color = Aqua, fontSize = 10.sp, letterSpacing = 2.sp, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(8.dp))
-                    Text("Everything you love.", color = Color.White, fontSize = 27.sp, fontWeight = FontWeight.ExtraBold)
-                    Text("All in one place.", color = Color(0xFFE7CFFF), fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(8.dp))
-                    Text("Anime • Donghua • Movies • Manga • Novels • Shorts", color = Color.White.copy(alpha = 0.82f), fontSize = 11.sp)
+                    Text("YOUR MEDIA, YOUR PACE", color = Aqua, fontSize = 10.sp, letterSpacing = 2.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(10.dp))
+                    Text("Watch deeply.", color = Color.White, fontSize = 29.sp, fontWeight = FontWeight.ExtraBold)
+                    Text("Read endlessly.", color = Color(0xFFE1E7D2), fontSize = 27.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(9.dp))
+                    Text("One calm space for the stories you follow.", color = Color.White.copy(alpha = 0.78f), fontSize = 12.sp)
                     Spacer(Modifier.height(14.dp))
                     Button(onClick = onDiscover, colors = ButtonDefaults.buttonColors(containerColor = Purple, contentColor = Night)) {
                         Icon(Icons.Filled.Explore, contentDescription = null)
@@ -612,8 +585,8 @@ private fun DiscoverScreen(
     val scope = rememberCoroutineScope()
 
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
-        Text("Discover", color = MaterialTheme.colorScheme.onBackground, fontSize = 23.sp, fontWeight = FontWeight.ExtraBold)
-        Text("Find something worth watching or reading.", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.65f), fontSize = 12.sp)
+        Text(if (initialCategory in listOf("Manga", "Manhwa", "Light Novels")) "Read" else "Watch", color = MaterialTheme.colorScheme.onBackground, fontSize = 25.sp, fontWeight = FontWeight.ExtraBold)
+        Text(if (initialCategory in listOf("Manga", "Manhwa", "Light Novels")) "Manga, manhwa and long-form reading." else "Anime, films and series from your sources.", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.65f), fontSize = 12.sp)
         Spacer(Modifier.height(12.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(
@@ -841,6 +814,7 @@ private fun ProviderManagerScreen(
     providers: List<MediaProvider>, sourceItems: List<MediaCard>, syncingId: String, message: String,
     foreground: Color, secondary: Color, surface: Color,
     onAdd: (MediaProvider) -> Unit, onRemove: (MediaProvider) -> Unit, onSync: (MediaProvider) -> Unit,
+    onToggle: (MediaProvider) -> Unit,
     onOpen: (MediaCard) -> Unit, onPlay: (MediaCard) -> Unit, onDownload: (MediaCard) -> Unit,
     libraryIds: Set<String>, onSave: (MediaCard) -> Unit
 ) {
@@ -863,7 +837,7 @@ private fun ProviderManagerScreen(
             Column {
                 Text("Extensions & Providers", color = foreground, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
                 Text(
-                    "Add a compatible source, scroll to Your extensions, then press Sync to load its titles.",
+                    "Connect catalogues and stream sources. Add a source, then use Test & Sync to fetch its content.",
                     color = secondary, fontSize = 12.sp
                 )
             }
@@ -904,7 +878,7 @@ private fun ProviderManagerScreen(
                         shape = RoundedCornerShape(15.dp)
                     )
                     Text(
-                        "Supported: HTTPS JSON/RSS/Atom feeds, M3U, direct media URLs, websites, and Stremio add-ons (paste the full HTTPS manifest.json URL). Mihon / Aniyomi APKs and CloudStream scripts still require separate runtimes.",
+                        "Works with HTTPS JSON, RSS/Atom, M3U, supported server-rendered catalogues, direct media links, and Stremio HTTP add-ons. Mihon/Komikku/Aniyomi APKs, CloudStream scripts, and other native plugin packages need their own runtimes and are not executable here.",
                         color = secondary, fontSize = 10.sp
                     )
                     OutlinedTextField(
@@ -994,9 +968,18 @@ private fun ProviderManagerScreen(
                 shape = RoundedCornerShape(18.dp)
             ) {
                 Column(Modifier.fillMaxWidth().padding(13.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                    Text(provider.name, color = foreground, fontWeight = FontWeight.Bold)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(provider.name, color = foreground, fontWeight = FontWeight.Bold)
+                            Text(
+                                provider.category + (if (provider.headers.isNotEmpty()) " • custom headers" else "") + " • " + sourceItems.count { it.providerId == provider.id } + " cached titles",
+                                color = secondary, fontSize = 10.sp
+                            )
+                        }
+                        Switch(checked = provider.enabled, onCheckedChange = { onToggle(provider) })
+                    }
                     Text(
-                        provider.category + (if (provider.headers.isNotEmpty()) " • custom headers" else "") + " • " + provider.url,
+                        provider.url,
                         color = secondary, fontSize = 10.sp, maxLines = 2, overflow = TextOverflow.Ellipsis
                     )
                     Row(
@@ -1006,7 +989,7 @@ private fun ProviderManagerScreen(
                     ) {
                         Button(
                             onClick = { onSync(provider) },
-                            enabled = syncingId != provider.id,
+                            enabled = syncingId != provider.id && provider.enabled,
                             modifier = Modifier.weight(1f).heightIn(min = 46.dp),
                             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
                         ) {
@@ -1017,7 +1000,7 @@ private fun ProviderManagerScreen(
                             } else {
                                 Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.size(17.dp))
                                 Spacer(Modifier.width(7.dp))
-                                Text("Sync")
+                                Text("Test & Sync")
                             }
                         }
                         TextButton(onClick = { onRemove(provider) }, modifier = Modifier.heightIn(min = 46.dp)) {
@@ -1045,6 +1028,74 @@ private fun ProviderManagerScreen(
 }
 
 @Composable
+private fun PlayerScreen(availableItems: List<MediaCard>, onPlay: (MediaCard) -> Unit) {
+    var title by remember { mutableStateOf("") }
+    var url by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf("") }
+    val readyItems = remember(availableItems) { availableItems.filter { it.streamUrl.startsWith("https://", true) }.distinctBy { it.streamUrl } }
+    LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 24.dp, top = 4.dp)) {
+        item {
+            Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Text("Player", color = MaterialTheme.colorScheme.onBackground, fontSize = 25.sp, fontWeight = FontWeight.ExtraBold)
+                Text("Play a supported media link or continue from one of your synced sources.", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.68f), fontSize = 12.sp)
+            }
+        }
+        item {
+            Card(modifier = Modifier.fillMaxWidth().liquidGlass(RoundedCornerShape(20.dp)), colors = CardDefaults.cardColors(containerColor = Color.Transparent), shape = RoundedCornerShape(20.dp)) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("Open a stream", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Text("MP4 • WebM • HLS • DASH • audio", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.64f), fontSize = 10.sp)
+                    OutlinedTextField(value = title, onValueChange = { title = it; error = "" }, modifier = Modifier.fillMaxWidth(), label = { Text("Name (optional)") }, placeholder = { Text("Now playing") }, singleLine = true)
+                    OutlinedTextField(value = url, onValueChange = { url = it.trimStart(); error = "" }, modifier = Modifier.fillMaxWidth(), label = { Text("HTTPS media URL") }, placeholder = { Text("https://example.com/video.m3u8") }, singleLine = true)
+                    if (error.isNotBlank()) Text(error, color = Pink, fontSize = 11.sp)
+                    Button(onClick = {
+                        val mediaUrl = url.trim()
+                        if (!mediaUrl.startsWith("https://", true)) error = "Enter a complete HTTPS media URL."
+                        else {
+                            onPlay(MediaCard(id = "manual-stream-" + mediaUrl.hashCode(), title = title.trim().ifBlank { "Now playing" }, subtitle = "Manual stream", category = "Player", streamUrl = mediaUrl))
+                            error = ""
+                        }
+                    }, enabled = url.isNotBlank(), modifier = Modifier.fillMaxWidth().height(50.dp)) {
+                        Icon(Icons.Filled.PlayArrow, contentDescription = null)
+                        Spacer(Modifier.width(7.dp))
+                        Text("Play stream", fontWeight = FontWeight.Bold)
+                    }
+                    Text("Paste a direct media link, not a catalogue or webpage. DRM and torrent links are not supported.", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), fontSize = 10.sp)
+                }
+            }
+        }
+        item {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Ready to play", color = MaterialTheme.colorScheme.onBackground, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Text(readyItems.size.toString(), color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f), fontSize = 11.sp)
+            }
+        }
+        if (readyItems.isEmpty()) item {
+            Card(modifier = Modifier.fillMaxWidth().liquidGlass(RoundedCornerShape(18.dp)), colors = CardDefaults.cardColors(containerColor = Color.Transparent), shape = RoundedCornerShape(18.dp)) {
+                Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("No playable links yet", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold)
+                    Text("Sync a provider that supplies episode or video URLs, or paste a direct HTTPS stream above. Anime metadata alone does not include episode files.", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f), fontSize = 11.sp)
+                }
+            }
+        } else items(readyItems, key = { it.id }) { item ->
+            Card(modifier = Modifier.fillMaxWidth().clickable { onPlay(item) }, colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(15.dp)) {
+                Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (item.coverUrl.isNotBlank()) AsyncImage(model = item.coverUrl, contentDescription = item.title, modifier = Modifier.size(52.dp, 66.dp).clip(RoundedCornerShape(9.dp)))
+                    else Box(Modifier.size(52.dp, 66.dp).clip(RoundedCornerShape(9.dp)).background(PanelRaised), contentAlignment = Alignment.Center) { Icon(Icons.Filled.Movie, contentDescription = null, tint = Aqua) }
+                    Spacer(Modifier.width(11.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(item.title, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Text(item.subtitle.ifBlank { item.providerName.ifBlank { "Direct stream" } }, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f), fontSize = 10.sp)
+                        Text(item.mimeType.ifBlank { item.streamUrl.substringBefore("?").substringAfterLast(".", "media").uppercase() }, color = Aqua, fontSize = 9.sp)
+                    }
+                    Icon(Icons.Filled.PlayArrow, contentDescription = "Play", tint = Purple)
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun SettingsScreen(
     keyValue: String, darkTheme: Boolean, foreground: Color, secondary: Color, surface: Color,
     onKeyChange: (String) -> Unit, onSaveKey: () -> Unit, onThemeChange: (Boolean) -> Unit, onDownloads: () -> Unit
@@ -1059,7 +1110,7 @@ private fun SettingsScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text("Dark theme", color = foreground)
-                        Text("Use the night-purple interface.", color = secondary, fontSize = 10.sp)
+                        Text("Use the low-glare ink interface.", color = secondary, fontSize = 10.sp)
                     }
                     Switch(checked = darkTheme, onCheckedChange = onThemeChange)
                 }
@@ -1087,7 +1138,7 @@ private fun SettingsScreen(
             }
         }
         Spacer(Modifier.height(10.dp))
-        Text("All IN ONE Media • Version 0.4.3", color = secondary, fontSize = 11.sp)
+        Text("All IN ONE Media • Version 0.5.0", color = secondary, fontSize = 11.sp)
         Text("Your library, providers, and settings are stored locally on this device.", color = secondary, fontSize = 10.sp)
     }
 }
@@ -1382,7 +1433,7 @@ private fun VideoPlayerDialog(item: MediaCard, onDismiss: () -> Unit) {
     var buffering by remember(item.streamUrl, item.mimeType, item.httpHeaders) { mutableStateOf(true) }
     val player = remember(item.streamUrl, item.mimeType, item.httpHeaders) {
         val httpFactory = DefaultHttpDataSource.Factory()
-            .setUserAgent("AllInOneMedia/0.4 Android")
+            .setUserAgent("AllInOneMedia/0.5 Android")
             .setDefaultRequestProperties(item.httpHeaders)
         val dataSourceFactory = DefaultDataSource.Factory(context, httpFactory)
         val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
@@ -1405,15 +1456,15 @@ private fun VideoPlayerDialog(item: MediaCard, onDismiss: () -> Unit) {
     }
     DisposableEffect(player) { onDispose { player.release() } }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Surface(modifier = Modifier.fillMaxWidth().padding(14.dp), shape = RoundedCornerShape(20.dp), color = Color(0xFF100D19)) {
-            Column(Modifier.padding(12.dp)) {
+        Surface(modifier = Modifier.fillMaxSize().padding(4.dp), shape = RoundedCornerShape(18.dp), color = Color(0xFF080A0A)) {
+            Column(Modifier.fillMaxSize().padding(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(item.title, color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                     TextButton(onClick = onDismiss) { Text("Close", color = Purple) }
                 }
                 AndroidView(
                     factory = { viewContext -> PlayerView(viewContext).apply { this.player = player; useController = true } },
-                    modifier = Modifier.fillMaxWidth().height(245.dp)
+                    modifier = Modifier.fillMaxWidth().weight(1f)
                 )
                 if (buffering) {
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
