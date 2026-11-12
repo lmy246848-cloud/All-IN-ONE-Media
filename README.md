@@ -2,7 +2,7 @@
 
 All IN ONE Media is an Android media hub for searching titles, adding compatible sources, opening episodes and chapters, reading text and image pages, and playing supported video streams.
 
-## Version 0.4.3
+## Version 0.5.0
 
 - Anime and donghua title discovery through AniList metadata.
 - Manga and manhwa search through MangaDex, including English chapter lists, scanlation-group attribution, and a continuous vertical image reader.
@@ -14,15 +14,16 @@ All IN ONE Media is an Android media hub for searching titles, adding compatible
 - Nested episode and chapter selection in title details.
 - In-app HTTPS browser for source pages that don't expose direct media URLs.
 - Media3 playback for MP4, WebM, M4V, HLS/M3U8, DASH/MPD and common audio formats, with MIME-type and custom request-header support.
-- Local library, downloads for supported direct files, liquid-glass-inspired interface, and dark/light themes.
+- Dedicated Watch, Player, and Read destinations; an always-accessible manual HTTPS stream player; full-screen Media3 playback; vertical manga reading; and a typography-adjustable book reader.
+- An ink-and-lime visual refresh, restrained borders, subtle motion, a persistent five-tab navigation bar, source enable/disable controls, and dark/light themes.
 
 ## Quick start
 
-1. Open **Discover** and choose a category.
-2. Search for a manga or manhwa, then open its title and choose an available English chapter.
-3. Search **Light Novels** for public-domain books; open a result to load its text.
-4. Search **Movies** for Internet Archive items; open a result to resolve and play an MP4 when one is available.
-5. For anime, donghua, series, and other sources, open **Extensions**. You can paste a compatible HTTPS JSON catalogue, RSS/Atom feed, M3U playlist, direct media URL, website URL, or a Stremio add-on's full `manifest.json` URL. Give it an optional name, select a type, and press **Apply / Add extension**. When a source requires headers, enter them in the advanced JSON field. Then press **Sync** and open a loaded result.
+1. Use **Watch** for anime, donghua, movies and series, **Read** for manga/manhwa/books, or **Player** to paste a direct HTTPS media URL.
+2. In **Read**, search for a manga or manhwa, open its title, then choose an available English chapter to open the continuous image reader.
+3. In **Read**, select **Light Novels** for public-domain books; open a result to load its text and adjust reading size.
+4. In **Watch**, search **Movies** for Internet Archive items; open a result to resolve and play an MP4 when one is available.
+5. For anime, donghua, series, and other sources, use the extension icon in the top bar to open **Extensions**. You can paste a compatible HTTPS JSON catalogue, RSS/Atom feed, M3U playlist, direct media URL, website URL, or a Stremio add-on's full `manifest.json` URL. Give it an optional name, select a type, and press **Apply / Add extension**. When a source requires headers, enter them in the advanced JSON field. Then press **Test & Sync**, enable/disable sources using their switch, and open a loaded result.
 
 A title listing is not itself a video or chapter. For an anime or series to play, its provider must supply a usable episode stream URL (or a web page that can play it). A JSON feed can provide nested `episodes` or `chapters`; see [the provider format](docs/PROVIDER_FORMAT.md).
 
@@ -34,13 +35,13 @@ The app does not bundle films, episodes, manga scans, novels, or third-party APK
 
 ## Build
 
-- Android application ID: `com.allinonemedia.app.v043`
-- Version: `0.4.3` (versionCode 11)
+- Android application ID: `com.allinonemedia.app.v050`
+- Version: `0.5.0` (versionCode 12)
 - Minimum Android version: Android 8.0 (API 26)
 - Build branch: [scratch-rebuild](https://github.com/lmy246848-cloud/All-IN-ONE-Media/tree/scratch-rebuild)
 - APK workflow: [Android APK and Release](https://github.com/lmy246848-cloud/All-IN-ONE-Media/actions/workflows/android.yml)
 
-The GitHub Actions workflow produces an APK and verifies its ZIP structure, package metadata, and signature before publishing it. This 0.4.3 build uses a new application ID (`com.allinonemedia.app.v043`) so it can install alongside earlier builds despite the unrecoverable temporary CI signing key. Android treats it as a separate app, so local library/provider data from 0.4.0 is not copied automatically. Without a persistent keystore configured through Actions secrets, later CI builds will also need separate install identities or a reinstall after a signing-key change.
+The GitHub Actions workflow produces an APK and verifies its ZIP structure, package metadata, and signature before publishing it. This 0.5.0 build uses a new application ID (`com.allinonemedia.app.v050`) so it can install alongside earlier builds. Local preferences, saved titles, and providers are app-private and are not automatically migrated. The CI signing key remains temporary until a persistent keystore is configured; future releases may need a reinstall or separate identity. Android treats it as a separate app, so local library/provider data from 0.4.0 is not copied automatically. Without a persistent keystore configured through Actions secrets, later CI builds will also need separate install identities or a reinstall after a signing-key change.
 
 ## API references
 
